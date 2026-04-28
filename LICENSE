@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 hothsys
+Copyright (c) 2026 Hiral Gosalia
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Third-Party Licenses
+
+This project includes the following third-party software:
+
+### MapLibre GL JS (v4.5.0)
+- License: 3-Clause BSD
+- Copyright: MapLibre contributors
+- https://github.com/maplibre/maplibre-gl-js
+
+### Supercluster (v8.0.1)
+- License: ISC
+- Copyright: Mapbox
+- https://github.com/mapbox/supercluster
+
+### exif-js (v2.3.0)
+- License: MIT
+- https://github.com/exif-js/exif-js
+
+### Josefin Sans (Google Fonts)
+- License: SIL Open Font License 1.1
+- https://fonts.google.com
+
+## Data & Service Attribution
+
+- Map data: OpenStreetMap contributors (ODbL 1.0)
+- Map tiles: OpenFreeMap (https://openfreemap.org)
+- Satellite imagery: Esri, Maxar, Earthstar Geographics
+- Geocoding: Nominatim / OpenStreetMap (ODbL 1.0)
