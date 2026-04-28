@@ -52,9 +52,11 @@ test.describe('App Load', () => {
   });
 
   test('auto-save indicator shows connected', async ({ page }) => {
-    const indicator = page.locator('#autosave-indicator');
+    // Open settings menu to access autosave status
+    await page.locator('.settings-btn').click();
+    const indicator = page.locator('#autosave-menu-status');
     await expect(indicator).toBeVisible();
     const text = await indicator.textContent();
-    expect(text.toLowerCase()).toMatch(/auto.?save|local/);
+    expect(text.toLowerCase()).toMatch(/connected|saving|saved|checking/);
   });
 });

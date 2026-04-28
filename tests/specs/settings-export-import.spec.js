@@ -30,13 +30,16 @@ test.describe('Settings & Export/Import', () => {
       page.evaluate(() => exportData()),
     ]);
 
-    expect(download.suggestedFilename()).toMatch(/matrix-backup.*\.json$/);
+    expect(download.suggestedFilename()).toMatch(/matrix-backup.*\.json(\.gz)?$/);
 
-    // Read downloaded content
+    // Read downloaded content (may be gzipped)
     const content = await download.createReadStream();
     const chunks = [];
     for await (const chunk of content) chunks.push(chunk);
-    const json = JSON.parse(Buffer.concat(chunks).toString());
+    const raw = Buffer.concat(chunks);
+    const { gunzipSync } = require('zlib');
+    const text = raw[0] === 0x1f && raw[1] === 0x8b ? gunzipSync(raw).toString() : raw.toString();
+    const json = JSON.parse(text);
     expect(json.photos).toBeDefined();
     expect(json.photos.length).toBe(1);
   });

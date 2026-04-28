@@ -65,7 +65,8 @@ test.describe('Albums', () => {
     await page.locator('.alb-detail-edit').click();
     await expect(page.locator('#meta-backdrop')).toHaveClass(/open/);
 
-    // Click delete button in modal footer
+    // Click delete button in modal footer — accept the confirm() dialog
+    page.removeAllListeners('dialog');
     page.once('dialog', async dialog => await dialog.accept());
     await page.locator('#m-footer .btn-danger').click();
 
