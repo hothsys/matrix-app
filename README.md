@@ -105,6 +105,8 @@ The app includes a Playwright integration test suite (47 tests across 8 spec fil
 python3 serve.py --run-tests
 ```
 
+Note: You may need to run this first  `npx install playwright` before executing the test suite
+
 This will:
 1. Create an isolated temp directory for test data
 2. Generate test fixture images (with EXIF GPS data)
