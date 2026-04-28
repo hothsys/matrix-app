@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Matrix — Photo Map</title>
+<link rel="icon" href="data:,">
+<link href="vendor/maplibre-gl.css" rel="stylesheet" />
+<script src="vendor/maplibre-gl.js"></script>
+<script src="vendor/supercluster.min.js"></script>
+<script src="vendor/exif.js"></script>
+<link href="css/styles.css" rel="stylesheet" />
+</head>
+<body>
+<div id="app">
+
+<!-- SIDEBAR -->
+<aside id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo-mark"><svg viewBox="0 0 11893 10545" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;"><path d="M7054.39,7459.7c-543.901,391.889 -1233.06,472.844 -1829.06,240.873l1499.53,-1542.75l329.523,1301.87Zm848.983,-1840.34c43.857,572.969 -149.786,1165.38 -579.583,1607.56c-50.867,52.332 -103.784,101.267 -158.362,146.699l-529.88,-2093.43l1267.83,339.173Zm-1852.87,1047.57l-951.616,979.038c-199.288,-94.837 -385.692,-226.481 -549.565,-394.993c-308.301,-317.036 -489.752,-716.134 -544.86,-1131.41l2046.04,547.364Zm-800.656,-350.805l-1259.18,-336.858c-36.236,-565.068 157.989,-1146.44 581.378,-1582.03c49.941,-51.381 101.859,-99.482 155.559,-144.363l522.244,2063.25Zm1546.69,-2338.13c199.522,94.908 386.021,226.597 549.966,395.185c301.849,310.399 482.102,699.457 541.241,1105.38l-2023.56,-541.348l932.352,-959.222Zm-1957.97,188.531c544.063,-393.593 1234.44,-475.332 1831.5,-243.113l-1501.92,1545.2l-329.58,-1302.09Z"/><path d="M5946.18,8.688l-951.913,1652.14l951.913,-619.55l951.917,619.55l-951.917,-1652.14Z" style="fill:#9795ce;fill-rule:nonzero;stroke:#000;stroke-width:17.38px;"/><path d="M5946.18,10535.3l-951.913,-1652.14l951.913,619.55l951.917,-619.55l-951.917,1652.14Z" style="fill:#9795ce;fill-rule:nonzero;stroke:#000;stroke-width:17.38px;"/><path d="M8.688,5923.76l1652.14,-951.912l-619.55,951.912l619.55,951.917l-1652.14,-951.917Z" style="fill:#9795ce;fill-rule:nonzero;stroke:#000;stroke-width:17.38px;"/><path d="M11883.7,5923.76l-1652.14,-951.912l619.546,951.912l-619.546,951.917l1652.14,-951.917Z" style="fill:#9795ce;fill-rule:nonzero;stroke:#000;stroke-width:17.38px;"/><path d="M9951.78,4676.68l0,3155.85c0,415.362 -358.966,752.579 -801.116,752.579l-6408.96,-0c-442.15,-0 -801.12,-337.217 -801.12,-752.579l-0,-3155.85l2030.1,-0c-190.443,332.725 -299.32,717.984 -299.32,1128.47c0,1256.47 1020.09,2276.56 2276.56,2276.56c1256.47,-0 2276.56,-1020.09 2276.56,-2276.56c-0,-410.488 -108.877,-795.747 -299.32,-1128.47l2026.62,-0Zm-4677.4,-2542.99c-9.469,-15.646 -14.88,-33.741 -14.88,-53.011l0,-107.512c0,-59.338 51.284,-107.508 114.446,-107.508l1144.46,-0c63.166,-0 114.445,48.17 114.445,107.508l0,107.512c0,19.575 -5.579,37.938 -15.333,53.755l-1342.68,-0.001c19.796,32.126 56.787,53.759 99.112,53.759l1144.46,-0c42.329,-0 79.316,-21.633 99.112,-53.758l759.233,-0.001l572.225,1075.12l1201.68,0c442.15,0 801.116,337.217 801.116,752.579l0,341.32l-2293.38,-0c-417.453,-474.969 -1029.22,-774.856 -1710.48,-774.856c-683.644,-0 -1297.31,301.993 -1714.8,779.789l0,-4.933l-2292.54,-0l-0,-341.32c-0,-415.362 358.97,-752.579 801.12,-752.579l1201.68,0l572.229,-1075.12l759.225,-0l-0.454,-0.744Zm3936.3,1570.19c-0,-50.006 -40.599,-90.605 -90.605,-90.605l-590.096,0c-50.006,0 -90.605,40.599 -90.605,90.605l0,181.209c0,50.006 40.599,90.604 90.605,90.604l590.096,0c50.006,0 90.605,-40.598 90.605,-90.604l-0,-181.209Z" style="fill:#fff;stroke:#fff;stroke-width:8.6px;stroke-linejoin:miter;stroke-miterlimit:4;"/></svg></div>
+    <div class="logo-text">Mat<span>rix</span></div>
+    <div style="position:relative;margin-left:auto">
+      <button class="settings-btn" onclick="toggleSettingsMenu(event)" title="Settings">⚙</button>
+      <div class="settings-dropdown" id="settings-dropdown">
+        <div class="settings-item" onclick="exportData()">
+          <span class="settings-item-icon">📤</span>
+          <div><div class="settings-item-label">Export Data</div><div class="settings-item-sub">Download backup as JSON</div></div>
+        </div>
+        <div class="settings-item" onclick="importData()">
+          <span class="settings-item-icon">📥</span>
+          <div><div class="settings-item-label">Import Data</div><div class="settings-item-sub">Restore from JSON backup</div></div>
+        </div>
+        <div class="settings-item" id="autosave-menu-item">
+          <span class="settings-item-icon">💾</span>
+          <div><div class="settings-item-label">Auto-Save</div><div class="settings-item-sub" id="autosave-menu-status">Checking...</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="sidebar-tabs">
+    <button class="stab active" onclick="switchSideTab('photos')">📸 Photos</button>
+    <button class="stab" onclick="switchSideTab('timeline')">📅 Timeline</button>
+    <button class="stab" onclick="switchSideTab('albums')">📁 Albums</button>
+  </div>
+  <div id="upload-zone" onclick="document.getElementById('file-input').click()">
+    <div class="up-icon">📁</div>
+    <p><strong>Add Photos</strong> — drop here or click</p>
+  </div>
+  <input type="file" id="file-input" multiple accept="image/*" />
+  <div id="progress-wrap">
+    <div id="progress-bar-outer"><div id="progress-bar-inner"></div></div>
+    <div id="progress-text">Processing…</div>
+  </div>
+  <div id="stats-bar">
+    <div class="stat"><div class="val" id="stat-photos">0</div><div class="lbl">Photos</div></div>
+    <div class="stat"><div class="val" id="stat-pinned">0</div><div class="lbl">Pinned</div></div>
+    <div class="stat"><div class="val" id="stat-albums">0</div><div class="lbl">Albums</div></div>
+  </div>
+  <div id="countries-bar">
+    <div class="cb-label">Countries Visited</div>
+    <div class="cb-flags collapsed" id="countries-flags"></div>
+    <button class="cb-toggle" id="countries-toggle" style="display:none" onclick="toggleCountriesBar()"></button>
+    <div class="cb-status" id="cb-status">&nbsp;</div>
+  </div>
+
+  <!-- PHOTOS TAB -->
+  <div class="tab-panel active" id="tab-photos">
+    <div id="panel-photos">
+      <div style="display:flex;align-items:center;justify-content:space-between"><div class="section-label">Your Photos</div><button class="collapse-all-btn all-collapsed" id="photos-collapse-all" onclick="toggleAllYears('photos')" title="Collapse/Expand all">▼</button></div>
+      <div id="photos-list">
+        <div class="empty-state"><div class="big">🌍</div>Add photos to build your travel map</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIMELINE TAB -->
+  <div class="tab-panel" id="tab-timeline">
+    <div id="panel-timeline">
+      <div class="empty-state"><div class="big">📅</div>Photos with dates appear here<br/>in chronological order</div>
+    </div>
+  </div>
+
+  <!-- ALBUMS TAB -->
+  <div class="tab-panel" id="tab-albums">
+    <!-- Album list view -->
+    <div id="albums-list-view" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <div id="panel-albums">
+        <div class="albums-header">
+          <div class="section-label">Albums</div>
+          <button class="new-album-btn" onclick="openNewAlbumModal()">＋ New Album</button>
+        </div>
+        <div id="albums-list">
+          <div class="empty-state"><div class="big">📁</div>No albums yet.<br/>Create one to organise your photos.</div>
+        </div>
+      </div>
+    </div>
+    <!-- Album detail view -->
+    <div id="album-detail">
+      <div class="alb-detail-header">
+        <button class="alb-back-btn" onclick="closeAlbumDetail()">‹ Back</button>
+        <div class="alb-detail-title" id="alb-detail-title"></div>
+        <button class="alb-detail-edit" onclick="openEditAlbumModal()" title="Edit album">✏️ Edit</button>
+      </div>
+      <div class="alb-detail-body" id="alb-detail-body"></div>
+    </div>
+  </div>
+</aside>
+
+<button id="sidebar-toggle">&#8249;</button>
+
+<!-- MAP -->
+<div id="map-wrap">
+  <div id="map-toolbar">
+    <div id="dest-search-wrap">
+      <span class="dest-search-icon">🔍</span>
+      <input type="text" id="dest-input" placeholder="Search destinations…" autocomplete="off" spellcheck="false" />
+      <button id="dest-clear" onclick="clearDestSearch()">✕</button>
+      <div id="dest-results"><div id="dest-loading">Searching…</div></div>
+    </div>
+    <div id="tile-spinner" class="tile-spinner"></div>
+    <div class="tb-sep"></div>
+    <div id="map-style-wrap" style="position:relative">
+      <button class="tb-btn" id="tb-style-btn" onclick="toggleStyleMenu(event)">Dark Map ▾</button>
+      <div class="style-menu" id="style-menu">
+        <div class="style-menu-item" data-style="light" onclick="setMapStyle('light')">Light Map</div>
+        <div class="style-menu-item active" data-style="dark" onclick="setMapStyle('dark')">Dark Map</div>
+        <div class="style-menu-item" data-style="enriched" onclick="setMapStyle('enriched')">Terrain</div>
+        <div class="style-menu-item" data-style="satellite" onclick="setMapStyle('satellite')">Satellite</div>
+      </div>
+    </div>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" onclick="zoomOut()" title="Zoom out a few levels">Zoom Out</button>
+    <button class="tb-btn" onclick="fitAll()" title="Zoom out to see all pins">Fit All</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="tb-play" onclick="togglePlayback()" title="Play trip animation">▶ Play</button>
+    <button class="tb-btn" id="tb-export-video" onclick="exportVideo()" title="Export trip animation as video">⏺ Export Video</button>
+  </div>
+  <div id="map"></div>
+  <div id="esri-attribution">&copy; <a href="https://www.esri.com/" target="_blank">Esri</a></div>
+</div>
+</div>
+
+<!-- EXPORT VIDEO OVERLAY -->
+<div id="export-overlay">
+  <div class="export-overlay-box">
+    <div class="export-overlay-title">Exporting Video</div>
+    <div class="export-overlay-progress" id="export-progress">Preparing…</div>
+    <div class="export-overlay-bar-wrap"><div class="export-overlay-bar" id="export-bar"></div></div>
+    <button class="export-cancel-btn" onclick="cancelExport()">Cancel</button>
+  </div>
+</div>
+
+<!-- GENERIC MODAL -->
+<div id="meta-backdrop">
+  <div id="meta-modal">
+    <div class="m-header">
+      <img class="m-header-img" id="m-img" src="" alt="" style="display:none"/>
+      <div class="m-header-info">
+        <div class="m-title" id="m-title">Edit</div>
+        <div class="m-sub" id="m-sub"></div>
+      </div>
+      <button class="m-close" onclick="closeMetaModal()">✕</button>
+    </div>
+    <div class="m-body" id="m-body"></div>
+    <div class="m-footer" id="m-footer">
+      <button class="btn-cancel" onclick="closeMetaModal()">Cancel</button>
+      <button class="btn-save" id="m-save-btn" onclick="handleModalSave()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox">
+  <button id="lb-close" onclick="closeLightbox()">✕</button>
+  <div id="lb-nav">
+    <button class="lb-nav-btn" onclick="lbNav(-1)">‹</button>
+    <button class="lb-nav-btn" onclick="lbNav(1)">›</button>
+  </div>
+  <img id="lb-img" src="" alt="" />
+  <div id="lb-caption"></div>
+</div>
+<div id="toast"></div>
+<div id="offline-banner">Offline — browsing cached data</div>
+
+<script src="js/utils.js"></script>
+<script src="js/state.js"></script>
+<script src="js/map.js"></script>
+<script src="js/pins.js"></script>
+<script src="js/photos.js"></script>
+<script src="js/albums.js"></script>
+<script src="js/modals.js"></script>
+<script src="js/search.js"></script>
+<script src="js/media.js"></script>
+<script src="js/data.js"></script>
+</body>
+</html>
