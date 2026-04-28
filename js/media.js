@@ -296,13 +296,14 @@ function showLbPhoto(animate=false){
       next.src = p.dataUrl;
     },180);
   } else {
-    // Hide stale image while the new one decodes to prevent a flash
-    // of the previous photo on slower machines.
+    // Clear stale image immediately to prevent a flash of the previous photo,
+    // then preload the new image and restore once decoded.
     img.style.opacity='0';
+    img.removeAttribute('src');
+    cap.textContent = caption;
     const next = new Image();
     next.onload = () => {
       img.src = next.src;
-      cap.textContent = caption;
       requestAnimationFrame(() => { img.style.opacity='1'; });
     };
     next.src = p.dataUrl;
