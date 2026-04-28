@@ -20,6 +20,9 @@ A local-first travel photo mapping app — runs entirely in your browser, no acc
 <img width="3432" height="1792" alt="image" src="https://github.com/user-attachments/assets/d07aa6c1-5643-4a7a-9930-77ed5d35e23c" />
 
 ---
+<img width="810" height="686" alt="animated" src="https://github.com/user-attachments/assets/38eccc4b-95bb-4b9f-a668-b125b30e2d5e" />
+
+---
 ## Features
 
 | Feature | Detail |
