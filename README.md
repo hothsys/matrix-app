@@ -26,7 +26,7 @@ A local-first travel photo mapping app — runs entirely in your browser, no acc
 <img width="988" height="604" alt="animated_panning" src="https://github.com/user-attachments/assets/a377f963-a288-4bce-bc78-f2f24ca52f20" />
 
 ---
-[![Watch video](https://github.com/user-attachments/assets/d667bd48-5f01-463a-abe7-107561fb01b1)](https://www.youtube.com/watch?v=AYfBMyqRKsM)
+[![Watch video](https://github.com/user-attachments/assets/d667bd48-5f01-463a-abe7-107561fb01b1)](https://www.youtube.com/watch?v=w9MhBRoiUho)
 
 ---
 ## Features
