@@ -8,6 +8,9 @@ matrix-requests.log
 __pycache__/
 *.pyc
 
+# Vendor (auto-downloaded by serve.py)
+vendor/
+
 # Node / Tests
 node_modules/
 tests/node_modules/
