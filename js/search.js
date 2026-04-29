@@ -55,7 +55,7 @@ function renderSearchResults(data) {
     const isDup = unique.some(u => {
       if (u.display_name.split(',')[0].trim() !== name) return false;
       const d = Math.hypot(parseFloat(u.lat) - lat, parseFloat(u.lon) - lon);
-      return d < 0.2; // ~20km
+      return d < 0.5; // ~50km
     });
     if (!isDup) unique.push(item);
   }
