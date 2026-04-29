@@ -278,13 +278,16 @@ function addPinLayers() {
     e.originalEvent.stopPropagation();
     if (_playbackActive) { stopPlayback(); return; }
     try { openPinPopup(lat, lng); } catch(err) { console.error(err); }
-    const targetZoom = Math.max(map.getZoom(), 14);
-    const needsZoom = map.getZoom() < targetZoom;
-    const dist = Math.hypot(map.getCenter().lng - lng, map.getCenter().lat - lat);
-    const alreadyThere = dist < 0.005 && !needsZoom;
-    if (!alreadyThere) {
-      map.flyTo({ center: [lng, lat], zoom: targetZoom, speed: 0.8, curve: 1.0, essential: true,
-        easing: t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2 });
+    const isEmpty = f.properties.iconId === 'pin-empty';
+    if (!isEmpty) {
+      const targetZoom = Math.max(map.getZoom(), 14);
+      const needsZoom = map.getZoom() < targetZoom;
+      const dist = Math.hypot(map.getCenter().lng - lng, map.getCenter().lat - lat);
+      const alreadyThere = dist < 0.005 && !needsZoom;
+      if (!alreadyThere) {
+        map.flyTo({ center: [lng, lat], zoom: targetZoom, speed: 0.8, curve: 1.0, essential: true,
+          easing: t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3)/2 });
+      }
     }
   });
   map.on('mouseenter', 'photo-pins-layer', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -504,11 +507,67 @@ async function initMap() {
     const lng = parseFloat(wrapper.dataset.lng);
     if (isNaN(lat) || isNaN(lng)) return;
     try { openPinPopup(lat, lng); } catch(err) { console.error(err); }
-    const targetZoom = Math.max(map.getZoom(), 14);
-    const dist = Math.hypot(map.getCenter().lng - lng, map.getCenter().lat - lat);
-    const alreadyThere = dist < 0.005 && map.getZoom() >= 13;
-    if (!alreadyThere) map.flyTo({ center:[lng, lat], zoom:targetZoom, duration:1200, offset:[0, 150] });
+    const k = locKey({lat, lng});
+    const isEmpty = photos.filter(p => locKey(p) === k).every(p => p.isEmptyPin);
+    if (!isEmpty) {
+      const targetZoom = Math.max(map.getZoom(), 14);
+      const dist = Math.hypot(map.getCenter().lng - lng, map.getCenter().lat - lat);
+      const alreadyThere = dist < 0.005 && map.getZoom() >= 13;
+      if (!alreadyThere) map.flyTo({ center:[lng, lat], zoom:targetZoom, duration:1200, offset:[0, 150] });
+    }
   }, true); // capture phase at window level — nothing can intercept before this
+}
+
+// Demo: France pin → zoom out → Sri Lanka → pan to Turkey
+function runDemo() {
+  const step = (fn) => new Promise(res => fn(res));
+  const fly = (center, zoom, duration) => step(res => {
+    map.flyTo({ center, zoom, duration });
+    map.once('moveend', res);
+  });
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
+  const rightClick = (lat, lng) => step(res => {
+    const point = map.project([lng, lat]);
+    map.fire('contextmenu', { lngLat: { lng, lat }, point, preventDefault: () => {} });
+    const poll = setInterval(() => {
+      const btn = document.querySelector('.dest-popup-btn[onclick*="pinEmptyLocation"]');
+      if (btn) { clearInterval(poll); res(btn); }
+    }, 300);
+  });
+
+  (async () => {
+    // 1. Start at zoom 4 over France, fly to Paris at zoom 8
+    map.jumpTo({ center: [2.3, 46.6], zoom: 4 });
+    await wait(1000);
+    await fly([2.3522, 48.8566], 8, 3000);
+    await wait(1000);
+
+    // Right-click Paris and pin it
+    const btn = await rightClick(48.8566, 2.3522);
+    await wait(1500);
+    btn.click();
+    await wait(1500);
+
+    // 2. Zoom back out to level 2
+    await fly([2.3522, 48.8566], 2, 2000);
+    await wait(1000);
+
+    // Fly to Sri Lanka at zoom 7
+    await fly([80.7718, 7.8731], 7, 4000);
+    await wait(1500);
+
+    // Pan to Turkey
+    await fly([32.0, 39.9], 7, 4000);
+    await wait(1000);
+
+    // Zoom out to level 1, switch to Light Map
+    await fly([32.0, 39.9], 1, 2000);
+    setMapStyle('light');
+    await wait(2000);
+
+    // Zoom to Saint Kitts & Nevis at level 10
+    await fly([-62.783, 17.357], 10, 4000);
+  })();
 }
 
 // ═══════════════════════════════════════
