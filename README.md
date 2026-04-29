@@ -97,7 +97,7 @@ The app works offline after your first visit:
 
 ## Testing
 
-The app includes a Playwright integration test suite (47 tests across 8 spec files). Tests run against a temporary data directory so your real data is never touched.
+The app includes a Playwright integration test suite. Tests run against a temporary data directory so your real data is never touched.
 
 **Prerequisites:** Node.js (for Playwright)
 
