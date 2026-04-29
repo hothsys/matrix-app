@@ -255,11 +255,16 @@ async function processFiles(files) {
 // ═══════════════════════════════════════
 // LIGHTBOX
 // ═══════════════════════════════════════
+function _updateLbNav(){
+  const vis = lbIds.length > 1 ? '' : 'none';
+  document.querySelectorAll('.lb-nav-btn').forEach(b => b.style.display = vis);
+}
 function openLightboxId(id,e){
   e&&e.stopPropagation();
   lbIds=photos.map(p=>p.id);
   lbIdx=lbIds.indexOf(id);
   showLbPhoto();
+  _updateLbNav();
   document.getElementById('lightbox').classList.add('open');
 }
 function openPinLightbox(id,e){
@@ -267,6 +272,7 @@ function openPinLightbox(id,e){
   lbIds=pinPopupPhotoIds&&pinPopupPhotoIds.length?pinPopupPhotoIds:photos.map(p=>p.id);
   lbIdx=lbIds.indexOf(id);
   showLbPhoto();
+  _updateLbNav();
   document.getElementById('lightbox').classList.add('open');
 }
 function showLbPhoto(animate=false){
