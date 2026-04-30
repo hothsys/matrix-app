@@ -285,6 +285,7 @@ function updateAutoSaveIndicator() {
 
 async function uploadPhotoFile(photo) {
   if (_savedPhotoDisk.has(photo.id)) return;
+  if (photo.isEmptyPin) { _savedPhotoDisk.add(photo.id); return; }
   // Upload full-size image
   if (photo.dataUrl && photo.dataUrl.startsWith('data:')) {
     await fetch(`/api/photos/${photo.id}`, {
@@ -322,11 +323,13 @@ async function autoSave() {
     // Build metadata-only payload with file paths instead of base64
     const metaPhotos = photos.map(p => {
       if (p.isEmptyPin) return { ...p };  // empty pins have no image files
-      const ext = (p.dataUrl && p.dataUrl.match(/data:image\/(\w+)/)?.[1] === 'png') ? 'png' : 'jpg';
+      const imgExt = (p.dataUrl && p.dataUrl.match(/data:image\/(\w+)/)?.[1] === 'png') ? 'png' : 'jpg';
+      const thumbMatch = p.thumbUrl && p.thumbUrl.match(/data:image\/(\w+)/);
+      const thumbExt = thumbMatch ? (thumbMatch[1] === 'jpeg' ? 'jpg' : thumbMatch[1]) : imgExt;
       return {
         ...p,
-        dataUrl: `matrix-photos/${p.id}.${ext}`,
-        thumbUrl: `matrix-photos/${p.id}_thumb.${ext}`
+        dataUrl: `matrix-photos/${p.id}.${imgExt}`,
+        thumbUrl: `matrix-photos/${p.id}_thumb.${thumbExt}`
       };
     });
     const payload = { version: 2, exportedAt: Date.now(), photos: metaPhotos, albums, geoCodeCache: {..._geoCodeCache}, geoCountryCache: {..._geoCountryCache} };
@@ -481,8 +484,45 @@ async function init() {
   }, 500);
   // Proactive tile caching — start after a short delay so it doesn't compete with initial load
   setTimeout(() => cacheMapTiles(), 10000);
+  // One-time migration: convert PNG thumbnails to JPEG (remove once both machines have run this)
+  setTimeout(() => _migrateThumbsToWebP(), 2000);
 }
 
+
+// ═══════════════════════════════════════
+// ONE-TIME MIGRATION: PNG → JPEG thumbnails
+// Remove this function and its setTimeout call in init() once both machines have run it.
+// ═══════════════════════════════════════
+async function _migrateThumbsToWebP() {
+  let migrated = 0;
+  for (const p of photos) {
+    if (!p.thumbUrl || p.thumbUrl.startsWith('data:image/jpeg')) continue;
+    try {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = p.thumbUrl; });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      p.thumbUrl = canvas.toDataURL('image/jpeg', 0.7);
+      await dbPut('photos', p);
+      // Upload the new WebP thumbnail to disk (bypasses _savedPhotoDisk guard)
+      if (_autoSaveAvailable) {
+        await fetch(`/api/photos/${p.id}/thumb`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl: p.thumbUrl })
+        });
+      }
+      migrated++;
+    } catch (_) { /* skip failures */ }
+  }
+  if (migrated) {
+    rebuildPhotoList();
+    buildTimeline();
+    scheduleAutoSave();
+  }
+}
 
 // ═══════════════════════════════════════
 // OFFLINE SUPPORT

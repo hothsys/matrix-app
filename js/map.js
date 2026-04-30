@@ -352,7 +352,23 @@ async function _doStyleSwap(style) {
       raiseLabelsAboveRoads();
       applyLabelScale();
       applyLabelVisibility();
-      buildClusterIndex();
+      // Re-add pin icons from pixel cache (fast) and refresh clusters
+      // without rebuilding the Supercluster index (unchanged)
+      if (scIndex) {
+        const pinned = photos.filter(p => p.lat !== null);
+        const seen = new Set();
+        pinned.forEach(p => {
+          const k = locKey(p);
+          if (seen.has(k)) return;
+          seen.add(k);
+          ensurePinIcon(p);
+        });
+        Object.values(domMarkers).forEach(m => m.remove());
+        domMarkers = {};
+        _refreshClustersNow();
+      } else {
+        buildClusterIndex();
+      }
     };
     map.once('styledata', () => setTimeout(restore, 100));
     setTimeout(restore, 600);
@@ -518,7 +534,7 @@ async function initMap() {
   }, true); // capture phase at window level — nothing can intercept before this
 }
 
-// Demo: France pin → zoom out → Sri Lanka → pan to Turkey
+// Demo: automated walkthrough with fake cursor
 function runDemo() {
   const step = (fn) => new Promise(res => fn(res));
   const fly = (center, zoom, duration) => step(res => {
@@ -535,18 +551,82 @@ function runDemo() {
     }, 300);
   });
 
+  const hover = (el) => {
+    el.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
+    el.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+  };
+  const unhover = (el) => {
+    el.dispatchEvent(new MouseEvent('mouseleave', { bubbles: true }));
+    el.dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+  };
+
+  // Fake cursor element
+  const cursor = document.createElement('div');
+  cursor.style.cssText = 'position:fixed;z-index:100000;pointer-events:none;width:32px;height:32px;transition:left .5s ease,top .5s ease,opacity .3s;opacity:0;left:-50px;top:-50px';
+  // SVG cursor arrow
+  cursor.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M5 3L19 12L12 13L9 20L5 3Z" fill="white" stroke="#333" stroke-width="1.5" stroke-linejoin="round"/>
+  </svg>`;
+  document.body.appendChild(cursor);
+
+  // Move cursor to an element or map coordinates
+  const moveTo = async (target, duration = 500) => {
+    let x, y;
+    if (target instanceof Element) {
+      const r = target.getBoundingClientRect();
+      x = r.left + r.width / 2;
+      y = r.top + r.height / 2;
+    } else if (target.lat !== undefined) {
+      const pt = map.project([target.lng, target.lat]);
+      const mapRect = map.getContainer().getBoundingClientRect();
+      x = mapRect.left + pt.x;
+      y = mapRect.top + pt.y;
+    }
+    cursor.style.transition = `left ${duration}ms ease, top ${duration}ms ease, opacity .3s`;
+    cursor.style.left = x + 'px';
+    cursor.style.top = y + 'px';
+    cursor.style.opacity = '1';
+    await wait(duration + 50);
+  };
+  const hideCursor = () => { cursor.style.opacity = '0'; };
+  // Brief scale pulse on click
+  const clickPulse = async () => {
+    cursor.style.transition = 'transform .1s';
+    cursor.style.transform = 'scale(0.8)';
+    await wait(100);
+    cursor.style.transform = 'scale(1)';
+    await wait(100);
+  };
+
   (async () => {
+    // Snapshot existing photo IDs so we can clean up demo pins at the end
+    const preExistingIds = new Set(photos.map(p => p.id));
+
+    // Start on Photos tab in Dark Map
+    if (activeAlbumId) closeAlbumDetail();
+    switchSideTab('photos');
+    await wait(300);
+    setMapStyle('dark');
+    await wait(1500);
+
     // 1. Start at zoom 4 over France, fly to Paris at zoom 8
     map.jumpTo({ center: [2.3, 46.6], zoom: 4 });
     await wait(1000);
     await fly([2.3522, 48.8566], 8, 3000);
-    await wait(1000);
+    await wait(500);
 
-    // Right-click Paris and pin it
-    const btn = await rightClick(48.8566, 2.3522);
+    // Move cursor to Paris, right-click
+    await moveTo({ lat: 48.8566, lng: 2.3522 });
+    await clickPulse();
+    const pinBtn = await rightClick(48.8566, 2.3522);
+    await wait(800);
+
+    // Move cursor to "Pin this location" button and click
+    await moveTo(pinBtn);
+    await clickPulse();
+    pinBtn.click();
     await wait(1500);
-    btn.click();
-    await wait(1500);
+    hideCursor();
 
     // 2. Zoom back out to level 2
     await fly([2.3522, 48.8566], 2, 2000);
@@ -565,10 +645,91 @@ function runDemo() {
     setMapStyle('light');
     await wait(2000);
 
-    // Zoom to Saint Kitts & Nevis at level 10
+    // Zoom to Saint Kitts & Nevis at level 10, then into Frigate Bay
     await fly([-62.783, 17.357], 10, 4000);
+    await wait(1000);
+    await fly([-62.6884, 17.2829], 16, 3000);
+    await wait(2000);
+
+    // 3. Hover over country flags in Countries Visited
+    const flags = document.querySelectorAll('#countries-flags span');
+    if (flags.length >= 2) {
+      await moveTo(flags[0]);
+      hover(flags[0]);
+      await wait(1000);
+      unhover(flags[0]);
+      await moveTo(flags[1]);
+      hover(flags[1]);
+      await wait(1000);
+      unhover(flags[1]);
+    }
+    await wait(500);
+
+    // 4. Switch to Albums tab
+    const albumsTab = document.querySelector('.stab:nth-child(3)');
+    if (albumsTab) {
+      await moveTo(albumsTab);
+      await clickPulse();
+    }
+    switchSideTab('albums');
+    await wait(800);
+
+    // Open the first visible album card (sorted order matches what's on screen)
+    const albumCard = document.querySelector('.album-card');
+    if (albumCard) {
+      await moveTo(albumCard);
+      await clickPulse();
+      albumCard.click(); // triggers openAlbumDetail for the correct album
+      await wait(1000);
+
+      // Click first photo in the album detail to open lightbox
+      const photoRow = document.querySelector('#alb-detail-body .alb-photo-row');
+      if (photoRow) {
+        await moveTo(photoRow);
+        await clickPulse();
+        photoRow.click();
+
+        // Wait for lightbox to open and image to load
+        await step(res => {
+          const poll = setInterval(() => {
+            const lb = document.getElementById('lightbox');
+            const img = document.getElementById('lb-img');
+            if (lb.classList.contains('open') && img && img.complete && img.naturalWidth) {
+              clearInterval(poll);
+              res();
+            }
+          }, 200);
+        });
+        hideCursor();
+        await wait(2000);
+
+        // Close lightbox
+        closeLightbox();
+      }
+    }
+
+    // Remove fake cursor
+    cursor.remove();
+
+    // Cleanup: remove empty pins created during demo
+    const demoPins = photos.filter(p => p.isEmptyPin && !preExistingIds.has(p.id));
+    for (const p of demoPins) {
+      photos.splice(photos.indexOf(p), 1);
+      photoMap.delete(p.id);
+      dbDel('photos', p.id);
+      deletePhotoFiles(p.id);
+    }
+    if (demoPins.length) {
+      refreshAll();
+      scheduleAutoSave();
+    }
   })();
 }
+
+// Ctrl+Shift+D to trigger demo
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'D') { e.preventDefault(); runDemo(); }
+});
 
 // ═══════════════════════════════════════
 // FIT MAP

@@ -30,20 +30,6 @@ document.addEventListener('click', e => {
   if (!document.getElementById('dest-search-wrap').contains(e.target)) dResults.style.display='none';
 });
 
-// Derive rough region from coordinates for disambiguating search results
-function _regionFromCoords(lat, lon) {
-  lat = parseFloat(lat); lon = parseFloat(lon);
-  if (lat >= 10 && lat <= 28 && lon >= -90 && lon <= -58) return 'Caribbean';
-  if (lat >= -60 && lat <= 15 && lon >= -90 && lon <= -30) return 'South America';
-  if (lat >= 5 && lat <= 84 && lon >= -170 && lon <= -30) return 'North America';
-  if (lat >= 35 && lat <= 75 && lon >= -25 && lon <= 65) return 'Europe';
-  if (lat >= -40 && lat <= 38 && lon >= -25 && lon <= 55) return 'Africa';
-  if (lat >= -10 && lat <= 80 && lon >= 25 && lon <= 180) return 'Asia';
-  if (lat >= -50 && lat <= 0 && lon >= 100 && lon <= 180) return 'Oceania';
-  if (lat >= -50 && lat <= -10 && lon >= -180 && lon <= -30) return 'South America';
-  if (lat >= -55 && lat <= 0 && lon >= 100) return 'Oceania';
-  return '';
-}
 
 function renderSearchResults(data) {
   dLoading.style.display='none';

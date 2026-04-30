@@ -220,7 +220,7 @@ input,textarea,select{font-family:var(--font)}
 
 /* PIN MARKERS (canvas-rendered via symbol layer — no DOM positioning) */
 /* Cluster markers still use DOM for click expand */
-.cluster-el{display:flex;align-items:center;justify-content:center;background:#E8706F;color:#fff;font-size:.7rem;font-weight:700;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);box-shadow:0 3px 12px rgba(0,0,0,.5);cursor:pointer}
+.cluster-el{display:flex;align-items:center;justify-content:center;color:#fff;font-size:.7rem;font-weight:700;border-radius:50%;border:1.5px solid rgba(255,255,255,.85);box-shadow:0 3px 12px rgba(0,0,0,.5);cursor:pointer}
 .cluster-el:hover{transform:scale(1.1);transition:transform .15s}
 .dest-pin-el{position:relative;width:28px;height:28px;border-radius:50%;background:var(--accent2);border:2px solid #fff;display:flex;align-items:center;justify-content:center;cursor:pointer;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4));box-sizing:border-box}
 .dest-pin-el-inner{font-size:12px;line-height:1}
