@@ -10,6 +10,10 @@ A local-first travel photo mapping app — runs entirely in your browser, no acc
    ```bash
    python3 serve.py
    ```
+   or
+   ```bash
+   ./start.command
+   ```
    On first run, `serve.py` downloads vendor dependencies (MapLibre, fonts, etc.) into `vendor/`.
    Your browser will open automatically at **http://localhost:8765**
 
