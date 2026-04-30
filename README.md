@@ -21,7 +21,7 @@ A local-first travel photo mapping app — runs entirely in your browser, no acc
    or click it to browse your drive.
 
 ---
-<img width="3438" height="1674" alt="image" src="https://github.com/user-attachments/assets/8706fe53-c987-4ebb-9487-0a49faf5fb3f" />
+<img width="3438" height="1692" alt="image" src="https://github.com/user-attachments/assets/4d802eac-8328-4dcf-85ab-7dfa9999a584" />
 
 ---
 <img width="810" height="686" alt="animated" src="https://github.com/user-attachments/assets/38eccc4b-95bb-4b9f-a668-b125b30e2d5e" />
