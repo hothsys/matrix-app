@@ -1,5 +1,5 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v10';
+const CACHE_VERSION = 'matrix-v11';
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
@@ -40,7 +40,7 @@ const MAX_TILES = 10000;
 // Local server port for disk-cached tile proxy
 let serverPort = 8765;
 
-console.log('SW: matrix-v10 loaded');
+console.log(`SW: ${CACHE_VERSION} loaded`);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

@@ -36,6 +36,88 @@ function fmtDateLong(date){
 }
 function v(id){const el=document.getElementById(id);return el?el.value:'';}
 
+// Derive rough region from coordinates (fallback when no country code available)
+function _regionFromCoords(lat, lon) {
+  lat = parseFloat(lat); lon = parseFloat(lon);
+  if (lat >= 10 && lat <= 28 && lon >= -90 && lon <= -58) return 'Caribbean';
+  if (lat >= -60 && lat <= 15 && lon >= -90 && lon <= -30) return 'South America';
+  if (lat >= 5 && lat <= 84 && lon >= -170 && lon <= -30) return 'North America';
+  // Middle East checked before Europe — covers Arabian Peninsula, Levant, Iran, Iraq
+  if (lat >= 12 && lat <= 42 && lon >= 34 && lon <= 63) return 'Middle East';
+  if (lat >= 35 && lat <= 75 && lon >= -25 && lon <= 65) return 'Europe';
+  if (lat >= -40 && lat <= 38 && lon >= -25 && lon <= 55) return 'Africa';
+  if (lat >= -10 && lat <= 80 && lon >= 25 && lon <= 180) return 'Asia';
+  if (lat >= -50 && lat <= 0 && lon >= 100 && lon <= 180) return 'Oceania';
+  if (lat >= -50 && lat <= -10 && lon >= -180 && lon <= -30) return 'South America';
+  if (lat >= -55 && lat <= 0 && lon >= 100) return 'Oceania';
+  return '';
+}
+
+// Country code → continent (definitive, no bounding-box ambiguity)
+const _countryContinent = {
+  // North America
+  US:'North America',CA:'North America',MX:'North America',GL:'North America',
+  // Caribbean
+  AG:'Caribbean',AI:'Caribbean',AW:'Caribbean',BB:'Caribbean',BL:'Caribbean',BM:'Caribbean',
+  BQ:'Caribbean',BS:'Caribbean',CU:'Caribbean',CW:'Caribbean',DM:'Caribbean',DO:'Caribbean',
+  GD:'Caribbean',GP:'Caribbean',HT:'Caribbean',JM:'Caribbean',KN:'Caribbean',KY:'Caribbean',
+  LC:'Caribbean',MF:'Caribbean',MQ:'Caribbean',MS:'Caribbean',PR:'Caribbean',SX:'Caribbean',
+  TC:'Caribbean',TT:'Caribbean',VC:'Caribbean',VG:'Caribbean',VI:'Caribbean',
+  // South America
+  AR:'South America',BO:'South America',BR:'South America',CL:'South America',CO:'South America',
+  EC:'South America',FK:'South America',GF:'South America',GY:'South America',PE:'South America',
+  PY:'South America',SR:'South America',UY:'South America',VE:'South America',
+  // Central America (grouped with North America)
+  BZ:'North America',CR:'North America',GT:'North America',HN:'North America',
+  NI:'North America',PA:'North America',SV:'North America',
+  // Europe
+  AD:'Europe',AL:'Europe',AT:'Europe',AX:'Europe',BA:'Europe',BE:'Europe',BG:'Europe',
+  BY:'Europe',CH:'Europe',CY:'Europe',CZ:'Europe',DE:'Europe',DK:'Europe',EE:'Europe',
+  ES:'Europe',FI:'Europe',FO:'Europe',FR:'Europe',GB:'Europe',GG:'Europe',GI:'Europe',
+  GR:'Europe',HR:'Europe',HU:'Europe',IE:'Europe',IM:'Europe',IS:'Europe',IT:'Europe',
+  JE:'Europe',LI:'Europe',LT:'Europe',LU:'Europe',LV:'Europe',MC:'Europe',MD:'Europe',
+  ME:'Europe',MK:'Europe',MT:'Europe',NL:'Europe',NO:'Europe',PL:'Europe',PT:'Europe',
+  RO:'Europe',RS:'Europe',SE:'Europe',SI:'Europe',SK:'Europe',SM:'Europe',UA:'Europe',
+  VA:'Europe',XK:'Europe',
+  // Middle East
+  AE:'Middle East',BH:'Middle East',IL:'Middle East',IQ:'Middle East',IR:'Middle East',
+  JO:'Middle East',KW:'Middle East',LB:'Middle East',OM:'Middle East',PS:'Middle East',
+  QA:'Middle East',SA:'Middle East',SY:'Middle East',TR:'Middle East',YE:'Middle East',
+  // Africa
+  AO:'Africa',BF:'Africa',BI:'Africa',BJ:'Africa',BW:'Africa',CD:'Africa',CF:'Africa',
+  CG:'Africa',CI:'Africa',CM:'Africa',CV:'Africa',DJ:'Africa',DZ:'Africa',EG:'Africa',
+  EH:'Africa',ER:'Africa',ET:'Africa',GA:'Africa',GH:'Africa',GM:'Africa',GN:'Africa',
+  GQ:'Africa',GW:'Africa',KE:'Africa',KM:'Africa',LR:'Africa',LS:'Africa',LY:'Africa',
+  MA:'Africa',MG:'Africa',ML:'Africa',MR:'Africa',MU:'Africa',MW:'Africa',MZ:'Africa',
+  NA:'Africa',NE:'Africa',NG:'Africa',RE:'Africa',RW:'Africa',SC:'Africa',SD:'Africa',
+  SL:'Africa',SN:'Africa',SO:'Africa',SS:'Africa',ST:'Africa',SZ:'Africa',TD:'Africa',
+  TG:'Africa',TN:'Africa',TZ:'Africa',UG:'Africa',ZA:'Africa',ZM:'Africa',ZW:'Africa',
+  // Asia
+  AF:'Asia',AM:'Asia',AZ:'Asia',BD:'Asia',BN:'Asia',BT:'Asia',CN:'Asia',GE:'Asia',
+  HK:'Asia',ID:'Asia',IN:'Asia',JP:'Asia',KG:'Asia',KH:'Asia',KP:'Asia',KR:'Asia',
+  KZ:'Asia',LA:'Asia',LK:'Asia',MM:'Asia',MN:'Asia',MO:'Asia',MV:'Asia',MY:'Asia',
+  NP:'Asia',PH:'Asia',PK:'Asia',RU:'Asia',SG:'Asia',TH:'Asia',TJ:'Asia',TL:'Asia',
+  TM:'Asia',TW:'Asia',UZ:'Asia',VN:'Asia',
+  // Oceania
+  AS:'Oceania',AU:'Oceania',CK:'Oceania',FJ:'Oceania',FM:'Oceania',GU:'Oceania',
+  KI:'Oceania',MH:'Oceania',MP:'Oceania',NC:'Oceania',NR:'Oceania',NU:'Oceania',
+  NZ:'Oceania',PF:'Oceania',PG:'Oceania',PN:'Oceania',PW:'Oceania',SB:'Oceania',
+  TO:'Oceania',TV:'Oceania',VU:'Oceania',WF:'Oceania',WS:'Oceania'
+};
+
+const EMPTY_PIN_COLOR = '#E8706F';
+const _continentColors = {
+  'North America':'#E04545', 'Caribbean':'#E0822A', 'South America':'#4AAF4E',
+  'Europe':'#4A7BD9', 'Middle East':'#22D4C8', 'Africa':'#B8A225',
+  'Asia':'#9B6FD9', 'Oceania':'#D94A8A'
+};
+function _continentColor(lat, lng, countryCode) {
+  if (countryCode && _countryContinent[countryCode]) {
+    return _continentColors[_countryContinent[countryCode]] || EMPTY_PIN_COLOR;
+  }
+  return _continentColors[_regionFromCoords(lat, lng)] || EMPTY_PIN_COLOR;
+}
+
 function datePickerHTML(id, value, opts={}) {
   const [y,m,d] = (value||'').split('-');
   const curYear = new Date().getFullYear();

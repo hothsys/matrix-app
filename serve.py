@@ -332,6 +332,12 @@ class MatrixHandler(SimpleHTTPRequestHandler):
             f.write(image_bytes)
         os.replace(tmp, filepath)
 
+        # Remove old files with different extensions (e.g. _thumb.jpg when saving _thumb.webp)
+        prefix = f"{photo_id}{suffix}."
+        for fname in os.listdir(PHOTOS_DIR):
+            if fname.startswith(prefix) and fname != filename and not fname.endswith('.tmp'):
+                os.remove(os.path.join(PHOTOS_DIR, fname))
+
         rel_path = f"matrix-photos/{filename}"
         self.send_response(200)
         self.send_header("Content-Type", "application/json")

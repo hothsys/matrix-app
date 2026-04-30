@@ -6,6 +6,8 @@
 // Track which photo icons have been added to the map style
 const _pinIconsAdded = new Set();
 let _pinIconTimer = null;
+// Cache raw (uncompensated) pixel data so style switches skip image load + canvas draw
+const _pinPixelCache = {}; // iconId → { width, height, data: Uint8ClampedArray }
 
 // Pre-compensate pin icon pixels for the dark-map CSS brightness/contrast filter
 // so photo thumbnails look natural despite canvas-wide filter: brightness(1.8) contrast(0.9).
@@ -27,22 +29,29 @@ function ensureEmptyPinIcon() {
   if (_pinIconsAdded.has(iconId) && map.hasImage(iconId)) return iconId;
   _pinIconsAdded.add(iconId);
   const dpr = window.devicePixelRatio || 2;
+  const cached = _pinPixelCache[iconId];
+  if (cached) {
+    const copy = new ImageData(new Uint8ClampedArray(cached.data), cached.width, cached.height);
+    _compensateDarkFilter(copy);
+    if (map.hasImage(iconId)) map.removeImage(iconId);
+    map.addImage(iconId, { width: cached.width, height: cached.height, data: new Uint8Array(copy.data.buffer) }, { pixelRatio: dpr });
+    return iconId;
+  }
   const size = 22 * dpr;
-  const pad = 4 * dpr; // extra space for drop shadow
+  const pad = 4 * dpr;
   const total = size + pad * 2;
   const cx = total / 2, cy = total / 2;
   const border = 1.5 * dpr;
   const canvas = document.createElement('canvas');
   canvas.width = total; canvas.height = total;
   const ctx = canvas.getContext('2d');
-  // Drop shadow
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 6 * dpr;
   ctx.shadowOffsetY = 2 * dpr;
   ctx.fillStyle = 'rgba(255,255,255,0.95)';
   ctx.beginPath(); ctx.arc(cx, cy, size/2, 0, Math.PI*2); ctx.fill();
   ctx.shadowColor = 'transparent';
-  ctx.fillStyle = '#d4693e';
+  ctx.fillStyle = EMPTY_PIN_COLOR;
   ctx.beginPath(); ctx.arc(cx, cy, size/2 - border, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#fff';
   ctx.font = `bold ${Math.round(size * 0.5)}px sans-serif`;
@@ -51,6 +60,7 @@ function ensureEmptyPinIcon() {
   ctx.fillText('?', cx, cy + 1);
   try {
     const imageData = ctx.getImageData(0, 0, total, total);
+    _pinPixelCache[iconId] = { width: total, height: total, data: new Uint8ClampedArray(imageData.data.data) };
     _compensateDarkFilter(imageData);
     if (map.hasImage(iconId)) map.removeImage(iconId);
     map.addImage(iconId, { width: total, height: total, data: new Uint8Array(imageData.data.buffer) }, { pixelRatio: dpr });
@@ -66,11 +76,22 @@ function ensurePinIcon(photo) {
   if (!photo.thumbUrl) return null;
   _pinIconsAdded.add(iconId); // mark as in-progress to avoid duplicates
 
+  const dpr = window.devicePixelRatio || 2;
+
+  // Use cached pixel data if available (skips image load + canvas draw)
+  const cached = _pinPixelCache[iconId];
+  if (cached) {
+    const copy = new ImageData(new Uint8ClampedArray(cached.data), cached.width, cached.height);
+    _compensateDarkFilter(copy);
+    if (map.hasImage(iconId)) map.removeImage(iconId);
+    map.addImage(iconId, { width: cached.width, height: cached.height, data: new Uint8Array(copy.data.buffer) }, { pixelRatio: dpr });
+    return iconId;
+  }
+
   const img = new Image();
   img.onload = () => {
-    const dpr = window.devicePixelRatio || 2;
     const size = 22 * dpr;
-    const pad = 4 * dpr; // extra space for drop shadow
+    const pad = 4 * dpr;
     const total = size + pad * 2;
     const cx = total / 2, cy = total / 2;
     const border = 1.5 * dpr;
@@ -78,7 +99,6 @@ function ensurePinIcon(photo) {
     canvas.width = total; canvas.height = total;
     const ctx = canvas.getContext('2d');
 
-    // Drop shadow
     ctx.shadowColor = 'rgba(0,0,0,0.45)';
     ctx.shadowBlur = 6 * dpr;
     ctx.shadowOffsetY = 2 * dpr;
@@ -86,10 +106,8 @@ function ensurePinIcon(photo) {
     ctx.beginPath(); ctx.arc(cx, cy, size/2, 0, Math.PI*2); ctx.fill();
     ctx.shadowColor = 'transparent';
 
-    // Circular photo
     ctx.save();
     ctx.beginPath(); ctx.arc(cx, cy, size/2 - border, 0, Math.PI*2); ctx.clip();
-    // Center-crop to fill circle (like object-fit:cover)
     const iw = img.naturalWidth, ih = img.naturalHeight;
     const drawSize = size - border*2;
     const scale = Math.max(drawSize / iw, drawSize / ih);
@@ -100,12 +118,12 @@ function ensurePinIcon(photo) {
 
     try {
       const imageData = ctx.getImageData(0, 0, total, total);
+      _pinPixelCache[iconId] = { width: total, height: total, data: new Uint8ClampedArray(imageData.data.data) };
       _compensateDarkFilter(imageData);
       if (map.hasImage(iconId)) map.removeImage(iconId);
       map.addImage(iconId, { width: total, height: total, data: new Uint8Array(imageData.data.buffer) }, { pixelRatio: dpr });
     } catch(e) { console.warn('addImage error', iconId, e); }
 
-    // Batch re-render — once icons are ready, refresh so they appear
     if (!_pinIconTimer) {
       _pinIconTimer = setTimeout(() => {
         _pinIconTimer = null;
@@ -129,11 +147,23 @@ function buildClusterIndex() {
     seen.add(k); return true;
   });
 
-  scIndex = new Supercluster({ radius: 60, maxZoom: 22 });
+  scIndex = new Supercluster({
+    radius: 60, maxZoom: 22,
+    map: (props) => {
+      const ccCounts = {};
+      if (props.cc) ccCounts[props.cc] = 1;
+      return { ccCounts };
+    },
+    reduce: (acc, props) => {
+      for (const cc in props.ccCounts) {
+        acc.ccCounts[cc] = (acc.ccCounts[cc] || 0) + props.ccCounts[cc];
+      }
+    }
+  });
   scIndex.load(representatives.map(p => ({
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-    properties: { id: p.id, lat: p.lat, lng: p.lng }
+    properties: { id: p.id, lat: p.lat, lng: p.lng, cc: p.countryCode || null }
   })));
 
   // Ensure icons exist for all pinned photos
@@ -178,9 +208,23 @@ function _refreshClustersNow() {
       if (domMarkers[key]) return;
 
       const size = Math.min(16 + Math.sqrt(count) * 4, 40);
+      // Pick continent color: use majority country code when all pins share one
+      // continent; fall back to cluster center coordinates for mixed-continent clusters
+      let topCC = null;
+      const ccCounts = feature.properties.ccCounts;
+      if (ccCounts) {
+        const continents = new Set();
+        let max = 0;
+        for (const cc in ccCounts) {
+          if (_countryContinent[cc]) continents.add(_countryContinent[cc]);
+          if (ccCounts[cc] > max) { max = ccCounts[cc]; topCC = cc; }
+        }
+        if (continents.size > 1) topCC = null; // mixed → use center coords
+      }
+      const color = _continentColor(lat, lng, topCC);
       const el = document.createElement('div');
       el.className = 'cluster-el';
-      el.style.cssText = `width:${size}px;height:${size}px;`;
+      el.style.cssText = `width:${size}px;height:${size}px;background:${color};`;
       el.textContent = count;
       el.addEventListener('click', () => {
         const nextZoom = scIndex.getClusterExpansionZoom(clusterId);
