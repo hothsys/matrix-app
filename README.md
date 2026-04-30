@@ -109,7 +109,7 @@ The app includes a Playwright integration test suite. Tests run against a tempor
 python3 serve.py --run-tests
 ```
 
-Note: You may need to run this first  `npx install playwright` before executing the test suite
+Note: You may need to run `npx playwright install` first before executing the test suite
 
 This will:
 1. Create an isolated temp directory for test data
