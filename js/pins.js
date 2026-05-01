@@ -148,22 +148,25 @@ function buildClusterIndex() {
   });
 
   scIndex = new Supercluster({
-    radius: 60, maxZoom: 22,
+    radius: 45, maxZoom: 22,
     map: (props) => {
       const ccCounts = {};
       if (props.cc) ccCounts[props.cc] = 1;
       return { ccCounts };
     },
     reduce: (acc, props) => {
-      for (const cc in props.ccCounts) {
-        acc.ccCounts[cc] = (acc.ccCounts[cc] || 0) + props.ccCounts[cc];
-      }
+      // Clone before merging — Supercluster reuses property objects across zoom
+      // levels, so mutating in place leaks counts between unrelated clusters
+      const merged = {};
+      for (const cc in acc.ccCounts) merged[cc] = acc.ccCounts[cc];
+      for (const cc in props.ccCounts) merged[cc] = (merged[cc] || 0) + props.ccCounts[cc];
+      acc.ccCounts = merged;
     }
   });
   scIndex.load(representatives.map(p => ({
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-    properties: { id: p.id, lat: p.lat, lng: p.lng, cc: p.countryCode || null }
+    properties: { id: p.id, lat: p.lat, lng: p.lng, cc: p.countryCode || _geoCodeCache[locKey(p)] || null }
   })));
 
   // Ensure icons exist for all pinned photos
@@ -208,18 +211,12 @@ function _refreshClustersNow() {
       if (domMarkers[key]) return;
 
       const size = Math.min(16 + Math.sqrt(count) * 4, 40);
-      // Pick continent color: use majority country code when all pins share one
-      // continent; fall back to cluster center coordinates for mixed-continent clusters
+      // Color by country code when available, fall back to geographic position
       let topCC = null;
       const ccCounts = feature.properties.ccCounts;
       if (ccCounts) {
-        const continents = new Set();
         let max = 0;
-        for (const cc in ccCounts) {
-          if (_countryContinent[cc]) continents.add(_countryContinent[cc]);
-          if (ccCounts[cc] > max) { max = ccCounts[cc]; topCC = cc; }
-        }
-        if (continents.size > 1) topCC = null; // mixed → use center coords
+        for (const cc in ccCounts) { if (ccCounts[cc] > max) { max = ccCounts[cc]; topCC = cc; } }
       }
       const color = _continentColor(lat, lng, topCC);
       const el = document.createElement('div');

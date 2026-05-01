@@ -1,5 +1,5 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v11';
+const CACHE_VERSION = 'matrix-v14';
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
@@ -62,7 +62,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((k) => k !== APP_CACHE && k !== TILE_CACHE).map((k) => caches.delete(k))
+        // Keep current app + tile caches, and preserve tile caches from older
+        // versions (tiles are map data — still valid across app updates)
+        keys.filter((k) => k !== APP_CACHE && k !== TILE_CACHE && !k.endsWith('-tiles')).map((k) => caches.delete(k))
       );
     })
   );
@@ -181,7 +183,10 @@ async function tileStrategy(request) {
   })();
 
   const originFetch = (async () => {
-    const resp = await fetch(request);
+    const oc = new AbortController();
+    const ot = setTimeout(() => oc.abort(), 8000);
+    const resp = await fetch(request, { signal: oc.signal });
+    clearTimeout(ot);
     if (!resp.ok) throw new Error('origin error');
     const body = await resp.arrayBuffer();
     const ct = resp.headers.get('Content-Type') || 'application/octet-stream';

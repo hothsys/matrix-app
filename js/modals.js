@@ -185,11 +185,13 @@ async function savePhotoMeta() {
 async function saveNewAlbum() {
   const name = v('alb-name').trim();
   if (!name) { showToast('Please enter an album name','error'); return; }
+  const startDate = getDatePickerValue('alb-start-date');
+  const endDate = getDatePickerValue('alb-end-date');
+  if (startDate && endDate && startDate > endDate) { showToast('Start date cannot be after end date','error'); return; }
   const album = {
     id: `a_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     name, description: v('alb-desc').trim(),
-    startDate: getDatePickerValue('alb-start-date'),
-    endDate: getDatePickerValue('alb-end-date'),
+    startDate, endDate,
     coverPhotoId: null, photoIds: [], createdAt: Date.now()
   };
   albums.push(album);
@@ -207,10 +209,13 @@ async function saveEditAlbum() {
   if (!album) return;
   const name = v('alb-name').trim();
   if (!name) { showToast('Album name is required','error'); return; }
+  const startDate = getDatePickerValue('alb-start-date');
+  const endDate = getDatePickerValue('alb-end-date');
+  if (startDate && endDate && startDate > endDate) { showToast('Start date cannot be after end date','error'); return; }
   album.name = name;
   album.description = v('alb-desc').trim();
-  album.startDate = getDatePickerValue('alb-start-date');
-  album.endDate = getDatePickerValue('alb-end-date');
+  album.startDate = startDate;
+  album.endDate = endDate;
   await dbPut('albums', album);
   closeMetaModal();
   renderAlbumDetail(album.id);
