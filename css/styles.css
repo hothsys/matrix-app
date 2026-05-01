@@ -55,8 +55,10 @@ input,textarea,select{font-family:var(--font)}
 #countries-bar .cb-flags span{cursor:default;transition:transform .1s}
 #countries-bar .cb-flags span:hover{transform:scale(1.25)}
 #countries-bar .cb-flags.collapsed{max-height:2.8em}
-#countries-bar .cb-toggle{background:none;border:none;color:var(--muted);font-size:.58rem;cursor:pointer;padding:2px 0 0;transition:color .15s}
+#countries-bar .cb-flags{transition:max-height .3s ease}
+#countries-bar .cb-toggle{background:none;border:none;color:var(--muted);font-size:1rem;cursor:pointer;padding:0;margin:6px 0 -4px;transition:color .15s, transform .3s ease;display:block;width:100%;text-align:center;line-height:1}
 #countries-bar .cb-toggle:hover{color:var(--text)}
+#countries-bar .cb-toggle.expanded{transform:rotate(180deg)}
 .stat{flex:1;padding:7px 4px;text-align:center}
 .stat+.stat{border-left:1px solid var(--border)}
 .stat .val{font-size:.9rem;font-weight:600;color:var(--text)}

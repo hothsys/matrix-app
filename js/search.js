@@ -55,7 +55,14 @@ function renderSearchResults(data) {
   dResults.innerHTML='';
   unique.forEach(item=>{
     const main = item.display_name.split(',')[0];
-    let detail = item.display_name.split(',').slice(1,3).join(', ').trim();
+    // Build detail from address fields for cleaner results (e.g. "Slovenia" not "Upravna Enota Ljubljana")
+    let detail = '';
+    if (item.address) {
+      const a = item.address;
+      const parts = [a.state || a.county || a.municipality || '', a.country || ''].filter(p => p && p !== main);
+      detail = parts.join(', ');
+    }
+    if (!detail) detail = item.display_name.split(',').slice(1,3).join(', ').trim();
     // For duplicate names, build a richer detail line with archipelago/region/country
     if (nameCounts[main] > 1 && item.address) {
       const a = item.address;
@@ -104,7 +111,7 @@ async function runDestSearch(q) {
       const b = map.getBounds();
       viewbox = `&viewbox=${b.getWest()},${b.getNorth()},${b.getEast()},${b.getSouth()}&bounded=0`;
     }
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=8&addressdetails=1${viewbox}`,{headers:{'Accept-Language':'en'}});
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=10&addressdetails=1${viewbox}`,{headers:{'Accept-Language':'en'}});
     if (!r.ok) { throw new Error(`HTTP ${r.status}`); }
     let data = await r.json();
     // Re-sort: results within the visible bounds come first, then by distance from center
@@ -134,7 +141,10 @@ async function runDestSearch(q) {
 function flyTo(item) {
   const lat=parseFloat(item.lat), lng=parseFloat(item.lon);
   dResults.style.display='none';
-  dInput.value=item.display_name.split(',').slice(0,2).join(', ');
+  const a = item.address || {};
+  const main = item.display_name.split(',')[0];
+  const country = a.country || item.display_name.split(',').pop().trim();
+  dInput.value = country && country !== main ? `${main}, ${country}` : main;
   dClear.style.display='block';
   map.flyTo({center:[lng,lat],zoom:12,duration:1200});
   if (destMarkerObj) { destMarkerObj.marker.remove(); if(destMarkerObj.popup) destMarkerObj.popup.remove(); destMarkerObj=null; }
@@ -142,8 +152,7 @@ function flyTo(item) {
   const el=document.createElement('div');
   el.className='dest-pin-el';
   el.innerHTML='<div class="dest-pin-el-inner">📍</div>';
-  const main=item.display_name.split(',')[0];
-  const detail=item.display_name.split(',').slice(1,3).join(', ');
+  const detail = a.country && a.country !== main ? a.country : item.display_name.split(',').pop().trim();
   // Cache the search name, country, and country code so pin popups and countries bar use it
   const cacheKey = `${lat.toFixed(4)}_${lng.toFixed(4)}`;
   _geoCache[cacheKey] = main;

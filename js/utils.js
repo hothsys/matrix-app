@@ -121,9 +121,9 @@ const _countryContinent = {
 
 const EMPTY_PIN_COLOR = '#E8706F';
 const _continentColors = {
-  'North America':'#E04545', 'Caribbean':'#612D53', 'South America':'#4AAF4E',
-  'Europe':'#4A7BD9', 'Middle East':'#22D4C8', 'Africa':'#B8A225',
-  'Asia':'#9B6FD9', 'Oceania':'#E050BE'
+  'North America':'#DA1212', 'Caribbean':'#612D53', 'South America':'#3c8a3f',
+  'Europe':'#1e56c1', 'Middle East':'#1abfad', 'Africa':'#b88e26',
+  'Asia':'#b826b3', 'Oceania':'#482ae0'
 };
 function _continentColor(lat, lng, countryCode) {
   if (countryCode && _countryContinent[countryCode]) {

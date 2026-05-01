@@ -387,6 +387,8 @@ async function _doStyleSwap(style) {
       } else {
         buildClusterIndex();
       }
+      // Update dark-map CSS class after pin icons are re-added with correct compensation
+      document.getElementById('map')?.classList.toggle('dark-map', _mapStyle === 'dark');
     };
     map.once('styledata', () => setTimeout(restore, 100));
     setTimeout(restore, 600);
@@ -489,6 +491,7 @@ async function initMap() {
 
   // Right-click on map to pin a location
   map.on('contextmenu', async (e) => {
+    try {
     e.preventDefault();
     // Detect water vs land early — water clicks are allowed at any zoom,
     // land clicks require zoom >= 7 for meaningful Nominatim results.
@@ -556,6 +559,7 @@ async function initMap() {
     popup.on('close', () => { if (destMarkerObj) { destMarkerObj.marker.remove(); destMarkerObj = null; } });
 
     destMarkerObj = { marker, popup };
+    } catch(err) { console.error('[right-click] ERROR in handler:', err); }
   });
 
   // Window-level capture handler — fires before anything else can intercept.
@@ -826,13 +830,15 @@ function toggleStyleMenu(e) {
 }
 
 function setMapStyle(mode) {
+  const wasDark = _mapStyle === 'dark';
   _mapStyle = mode;
   // Persist style preference (satellite resets to previous on reload)
   if (mode !== 'satellite') localStorage.setItem('matrix-theme', mode);
 
-  // Update CSS classes
+  // Defer dark-map CSS class removal until pin icons are re-added with correct
+  // compensation (otherwise pre-darkened images render without the CSS filter)
   const mapEl = document.getElementById('map');
-  mapEl.classList.toggle('dark-map', _mapStyle === 'dark');
+  if (_mapStyle === 'dark') mapEl.classList.add('dark-map');
   mapEl.classList.toggle('sat-mode', _mapStyle === 'satellite');
 
   // Labels toggle visibility

@@ -56,8 +56,7 @@ function updateCountriesBar() {
     const isOverflowing = flagsEl.scrollHeight > flagsEl.clientHeight + 2;
     toggle.style.display = isOverflowing || !flagsEl.classList.contains('collapsed') ? 'block' : 'none';
     if (toggle.style.display === 'block') {
-      const collapsed = flagsEl.classList.contains('collapsed');
-      toggle.textContent = collapsed ? `Show all ${sorted.length} countries` : 'Show less';
+      toggle.classList.toggle('expanded', !flagsEl.classList.contains('collapsed'));
     }
   });
 }
@@ -65,10 +64,23 @@ function updateCountriesBar() {
 function toggleCountriesBar() {
   const flagsEl = document.getElementById('countries-flags');
   const toggle = document.getElementById('countries-toggle');
-  flagsEl.classList.toggle('collapsed');
   const collapsed = flagsEl.classList.contains('collapsed');
-  const count = flagsEl.querySelectorAll('span[data-name]').length;
-  toggle.textContent = collapsed ? `Show all ${count} countries` : 'Show less';
+  if (collapsed) {
+    // Expand: set max-height to actual content height for smooth animation
+    flagsEl.style.maxHeight = flagsEl.scrollHeight + 'px';
+    flagsEl.classList.remove('collapsed');
+    toggle.classList.add('expanded');
+    // After transition, remove inline max-height so it can grow if flags change
+    setTimeout(() => { flagsEl.style.maxHeight = ''; }, 300);
+  } else {
+    // Collapse: set current height first, then animate to collapsed height
+    flagsEl.style.maxHeight = flagsEl.scrollHeight + 'px';
+    requestAnimationFrame(() => {
+      flagsEl.classList.add('collapsed');
+      flagsEl.style.maxHeight = '';
+      toggle.classList.remove('expanded');
+    });
+  }
 }
 // Country flag hover → show name in status bar
 (function() {
