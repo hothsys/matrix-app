@@ -12,13 +12,16 @@ const _pinPixelCache = {}; // iconId → { width, height, data: Uint8ClampedArra
 // Pre-compensate pin icon pixels for the dark-map CSS brightness/contrast filter
 // so photo thumbnails look natural despite canvas-wide filter: brightness(1.8) contrast(0.9).
 // Inverse: undo contrast first → (v - 12.8) / 0.9, then undo brightness → v / 1.8.
-function _compensateDarkFilter(imageData) {
+function _compensateDarkFilter(imageData, strength) {
   if (_mapStyle !== 'dark') return;
+  const s = strength !== undefined ? strength : 1;
   const d = imageData.data;
   for (let i = 0; i < d.length; i += 4) {
     if (d[i + 3] === 0) continue; // skip transparent pixels
     for (let c = 0; c < 3; c++) {
-      d[i + c] = Math.max(0, Math.min(255, ((d[i + c] - 12.8) / 0.9) / 1.8));
+      const orig = d[i + c];
+      const comp = ((orig - 12.8) / 0.9) / 1.8;
+      d[i + c] = Math.max(0, Math.min(255, Math.round(orig + (comp - orig) * s)));
     }
   }
 }
@@ -32,7 +35,8 @@ function ensureEmptyPinIcon() {
   const cached = _pinPixelCache[iconId];
   if (cached) {
     const copy = new ImageData(new Uint8ClampedArray(cached.data), cached.width, cached.height);
-    _compensateDarkFilter(copy);
+    // Empty pins are UI elements — use lighter compensation so they stay visible on dark map
+    _compensateDarkFilter(copy, 0.55);
     if (map.hasImage(iconId)) map.removeImage(iconId);
     map.addImage(iconId, { width: cached.width, height: cached.height, data: new Uint8Array(copy.data.buffer) }, { pixelRatio: dpr });
     return iconId;
@@ -48,7 +52,7 @@ function ensureEmptyPinIcon() {
   ctx.shadowColor = 'rgba(0,0,0,0.45)';
   ctx.shadowBlur = 6 * dpr;
   ctx.shadowOffsetY = 2 * dpr;
-  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.fillStyle = '#fff';
   ctx.beginPath(); ctx.arc(cx, cy, size/2, 0, Math.PI*2); ctx.fill();
   ctx.shadowColor = 'transparent';
   ctx.fillStyle = EMPTY_PIN_COLOR;
@@ -60,8 +64,8 @@ function ensureEmptyPinIcon() {
   ctx.fillText('?', cx, cy + 1);
   try {
     const imageData = ctx.getImageData(0, 0, total, total);
-    _pinPixelCache[iconId] = { width: total, height: total, data: new Uint8ClampedArray(imageData.data.data) };
-    _compensateDarkFilter(imageData);
+    _pinPixelCache[iconId] = { width: total, height: total, data: new Uint8ClampedArray(imageData.data) };
+    _compensateDarkFilter(imageData, 0.55);
     if (map.hasImage(iconId)) map.removeImage(iconId);
     map.addImage(iconId, { width: total, height: total, data: new Uint8Array(imageData.data.buffer) }, { pixelRatio: dpr });
   } catch(e) { console.warn('addImage error', iconId, e); }
@@ -118,7 +122,7 @@ function ensurePinIcon(photo) {
 
     try {
       const imageData = ctx.getImageData(0, 0, total, total);
-      _pinPixelCache[iconId] = { width: total, height: total, data: new Uint8ClampedArray(imageData.data.data) };
+      _pinPixelCache[iconId] = { width: total, height: total, data: new Uint8ClampedArray(imageData.data) };
       _compensateDarkFilter(imageData);
       if (map.hasImage(iconId)) map.removeImage(iconId);
       map.addImage(iconId, { width: total, height: total, data: new Uint8Array(imageData.data.buffer) }, { pixelRatio: dpr });
@@ -148,22 +152,25 @@ function buildClusterIndex() {
   });
 
   scIndex = new Supercluster({
-    radius: 60, maxZoom: 22,
+    radius: 45, maxZoom: 22,
     map: (props) => {
       const ccCounts = {};
       if (props.cc) ccCounts[props.cc] = 1;
       return { ccCounts };
     },
     reduce: (acc, props) => {
-      for (const cc in props.ccCounts) {
-        acc.ccCounts[cc] = (acc.ccCounts[cc] || 0) + props.ccCounts[cc];
-      }
+      // Clone before merging — Supercluster reuses property objects across zoom
+      // levels, so mutating in place leaks counts between unrelated clusters
+      const merged = {};
+      for (const cc in acc.ccCounts) merged[cc] = acc.ccCounts[cc];
+      for (const cc in props.ccCounts) merged[cc] = (merged[cc] || 0) + props.ccCounts[cc];
+      acc.ccCounts = merged;
     }
   });
   scIndex.load(representatives.map(p => ({
     type: 'Feature',
     geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-    properties: { id: p.id, lat: p.lat, lng: p.lng, cc: p.countryCode || null }
+    properties: { id: p.id, lat: p.lat, lng: p.lng, cc: p.countryCode || _geoCodeCache[locKey(p)] || null }
   })));
 
   // Ensure icons exist for all pinned photos
@@ -208,23 +215,23 @@ function _refreshClustersNow() {
       if (domMarkers[key]) return;
 
       const size = Math.min(16 + Math.sqrt(count) * 4, 40);
-      // Pick continent color: use majority country code when all pins share one
-      // continent; fall back to cluster center coordinates for mixed-continent clusters
+      // Color by country code when available, fall back to geographic position
       let topCC = null;
       const ccCounts = feature.properties.ccCounts;
       if (ccCounts) {
-        const continents = new Set();
         let max = 0;
-        for (const cc in ccCounts) {
-          if (_countryContinent[cc]) continents.add(_countryContinent[cc]);
-          if (ccCounts[cc] > max) { max = ccCounts[cc]; topCC = cc; }
-        }
-        if (continents.size > 1) topCC = null; // mixed → use center coords
+        for (const cc in ccCounts) { if (ccCounts[cc] > max) { max = ccCounts[cc]; topCC = cc; } }
       }
-      const color = _continentColor(lat, lng, topCC);
+      // Smooth rainbow gradient for clusters with 10+ photos
+      let bg;
+      if (count >= 10) {
+        bg = 'conic-gradient(#DA1212, #b88e26, #3c8a3f, #1abfad, #1e56c1, #482ae0, #b826b3, #612D53, #DA1212)';
+      } else {
+        bg = _continentColor(lat, lng, topCC);
+      }
       const el = document.createElement('div');
       el.className = 'cluster-el';
-      el.style.cssText = `width:${size}px;height:${size}px;background:${color};`;
+      el.style.cssText = `width:${size}px;height:${size}px;background:${bg};`;
       el.textContent = count;
       el.addEventListener('click', () => {
         const nextZoom = scIndex.getClusterExpansionZoom(clusterId);
@@ -289,7 +296,7 @@ async function reverseGeocode(lat, lng) {
       [14, 14, ['tourism','building','amenity','leisure','road','neighbourhood','suburb','village','town','city','county','state','province']],
       [12, 12, ['suburb','neighbourhood','village','town','city','county','state','province']],
       [ 9, 10, ['city','town','village','county','state','province']],
-      [ 0,  0, ['city','town','village','state','province','county']],
+      [ 0,  5, ['city','town','village','state','province','county']],
     ];
     const z = map.getZoom();
     const tier = ZOOM_TIERS.find(t => z >= t[0]);

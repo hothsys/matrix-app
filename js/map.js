@@ -95,6 +95,16 @@ function _patchStyleWater(styleObj) {
     styleObj.layers = styleObj.layers.filter(l => l.id !== 'natural_earth');
     if (styleObj.sources) delete styleObj.sources['ne2_shaded'];
   }
+  // Apple Maps Dark palette — neutral dark land, distinctly blue water.
+  // Colors pre-compensated for canvas filter brightness(1.8) contrast(0.9).
+  if (_mapStyle === 'dark') {
+    for (const layer of styleObj.layers) {
+      if (!layer.paint) layer.paint = {};
+      if (layer.type === 'fill' && /^water/.test(layer.id)) {
+        layer.paint['fill-color'] = '#131619';
+      }
+    }
+  }
   const color = _mapStyle === 'dark' ? '#6a9fd8' : '#2c5f8a';
   let hasPointLabel = false;
   for (const layer of styleObj.layers) {
@@ -108,9 +118,14 @@ function _patchStyleWater(styleObj) {
   }
   // Hide major city labels at zoom 10+ so they don't mislead when right-clicking returns a sub-area
   const cityLayers = ['place_city', 'place_city_large', 'label_city', 'label_city_capital'];
+  // Show state/province labels only at zoom 2.5+
+  const stateLayers = ['place_state', 'label_state'];
   for (const layer of styleObj.layers) {
     if (cityLayers.includes(layer.id)) {
       layer.maxzoom = 10;
+    }
+    if (stateLayers.includes(layer.id)) {
+      layer.minzoom = 2.5;
     }
   }
 
@@ -331,7 +346,10 @@ async function _doStyleSwap(style) {
         styleObj = JSON.parse(JSON.stringify(_styleJsonCache[style]));
       } else {
         try {
-          const r = await fetch(style);
+          const ac = new AbortController();
+          const timer = setTimeout(() => ac.abort(), 5000);
+          const r = await fetch(style, { signal: ac.signal });
+          clearTimeout(timer);
           const json = await r.json();
           _styleJsonCache[style] = json;
           styleObj = JSON.parse(JSON.stringify(json));
@@ -369,6 +387,8 @@ async function _doStyleSwap(style) {
       } else {
         buildClusterIndex();
       }
+      // Update dark-map CSS class after pin icons are re-added with correct compensation
+      document.getElementById('map')?.classList.toggle('dark-map', _mapStyle === 'dark');
     };
     map.once('styledata', () => setTimeout(restore, 100));
     setTimeout(restore, 600);
@@ -382,7 +402,10 @@ async function initMap() {
   const styleUrl = _styleUrl();
   let initStyle;
   try {
-    const r = await fetch(styleUrl);
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 5000);
+    const r = await fetch(styleUrl, { signal: ac.signal });
+    clearTimeout(timer);
     const json = await r.json();
     _styleJsonCache[styleUrl] = json; // seed cache so first style switch is instant
     initStyle = JSON.parse(JSON.stringify(json));
@@ -394,6 +417,24 @@ async function initMap() {
   fetch(otherUrl).then(r => r.json()).then(j => { _styleJsonCache[otherUrl] = j; }).catch(() => {});
   map = new maplibregl.Map({ container:'map', style: initStyle, center:[0,20], zoom:1.8, attributionControl:false, preserveDrawingBuffer:true });
   map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'bottom-right');
+  // Recover from WebGL context loss (Safari loses context after sleep or memory pressure)
+  const canvas = map.getCanvas();
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault(); // allow context to be restored
+    console.warn('WebGL context lost — waiting for restore');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    console.log('WebGL context restored — reinitializing map');
+    map.triggerRepaint();
+  });
+  // Safety net: if map is still blank after 8 seconds, show a reload prompt
+  setTimeout(() => {
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    if (!gl || gl.isContextLost()) {
+      console.warn('Map canvas has no WebGL context — prompting reload');
+      showToast('Map failed to load — please refresh the page', 'error');
+    }
+  }, 8000);
   // Provide a transparent 1x1 placeholder for any missing sprite images (e.g. POI icons)
   map.on('styleimagemissing', (e) => {
     if (!map.hasImage(e.id)) {
@@ -439,13 +480,18 @@ async function initMap() {
     // Tile loading spinner
     const tileSpinner = document.getElementById('tile-spinner');
     map.on('dataloading', () => { tileSpinner?.classList.add('active'); });
-    map.on('idle', () => { tileSpinner?.classList.remove('active'); });
+    map.on('idle', () => {
+      tileSpinner?.classList.remove('active');
+      const mapLoading = document.getElementById('map-loading');
+      if (mapLoading) { mapLoading.classList.add('done'); setTimeout(() => mapLoading.remove(), 400); }
+    });
   });
   map.on('movestart', () => { _mapBusy = true; });
   map.on('moveend', () => { _mapBusy = false; });
 
   // Right-click on map to pin a location
   map.on('contextmenu', async (e) => {
+    try {
     e.preventDefault();
     // Detect water vs land early — water clicks are allowed at any zoom,
     // land clicks require zoom >= 7 for meaningful Nominatim results.
@@ -513,6 +559,7 @@ async function initMap() {
     popup.on('close', () => { if (destMarkerObj) { destMarkerObj.marker.remove(); destMarkerObj = null; } });
 
     destMarkerObj = { marker, popup };
+    } catch(err) { console.error('[right-click] ERROR in handler:', err); }
   });
 
   // Window-level capture handler — fires before anything else can intercept.
@@ -783,13 +830,15 @@ function toggleStyleMenu(e) {
 }
 
 function setMapStyle(mode) {
+  const wasDark = _mapStyle === 'dark';
   _mapStyle = mode;
   // Persist style preference (satellite resets to previous on reload)
   if (mode !== 'satellite') localStorage.setItem('matrix-theme', mode);
 
-  // Update CSS classes
+  // Defer dark-map CSS class removal until pin icons are re-added with correct
+  // compensation (otherwise pre-darkened images render without the CSS filter)
   const mapEl = document.getElementById('map');
-  mapEl.classList.toggle('dark-map', _mapStyle === 'dark');
+  if (_mapStyle === 'dark') mapEl.classList.add('dark-map');
   mapEl.classList.toggle('sat-mode', _mapStyle === 'satellite');
 
   // Labels toggle visibility

@@ -59,7 +59,7 @@
   <div id="countries-bar">
     <div class="cb-label">Countries Visited</div>
     <div class="cb-flags collapsed" id="countries-flags"></div>
-    <button class="cb-toggle" id="countries-toggle" style="display:none" onclick="toggleCountriesBar()"></button>
+    <button class="cb-toggle" id="countries-toggle" style="display:none" onclick="toggleCountriesBar()" aria-label="Toggle countries">▾</button>
     <div class="cb-status" id="cb-status">&nbsp;</div>
   </div>
 
@@ -137,6 +137,7 @@
 
   </div>
   <div id="map"></div>
+  <div id="map-loading"><div class="map-loading-spinner"></div></div>
   <div id="esri-attribution">&copy; <a href="https://www.esri.com/" target="_blank">Esri</a></div>
 </div>
 </div>

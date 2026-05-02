@@ -67,16 +67,33 @@ DATA_FILE = os.path.join(APP_DIR, "matrix-data.json")
 PHOTOS_DIR = os.path.join(APP_DIR, "matrix-photos")
 TILES_DIR = os.path.join(APP_DIR, "matrix-tiles")
 VENDOR_DIR = os.path.join(APP_DIR, "vendor")
-MAX_TILES_MB = 500
+MAX_TILES_MB = 200
 LOG_FILE = os.path.join(APP_DIR, "matrix-requests.log")
 
 # Set up file logger for tile/GET requests
+MAX_LOG_LINES = 10000
 _req_logger = logging.getLogger('requests')
 _req_logger.setLevel(logging.INFO)
 _req_handler = logging.FileHandler(LOG_FILE)
 _req_handler.setFormatter(logging.Formatter('%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S'))
 _req_logger.addHandler(_req_handler)
 _req_logger.propagate = False
+
+def _rotate_log():
+    """Keep only the last MAX_LOG_LINES lines in the request log."""
+    try:
+        if not os.path.exists(LOG_FILE):
+            return
+        size = os.path.getsize(LOG_FILE)
+        if size < 1_000_000:  # Only rotate above 1MB
+            return
+        with open(LOG_FILE, 'r') as f:
+            lines = f.readlines()
+        if len(lines) > MAX_LOG_LINES:
+            with open(LOG_FILE, 'w') as f:
+                f.writelines(lines[-MAX_LOG_LINES:])
+    except OSError:
+        pass
 
 # External dependencies to bundle locally
 VENDOR_FILES = {
@@ -223,37 +240,43 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        if self.path == "/api/data":
-            self._serve_data()
-        elif self.path.startswith("/api/tiles/proxy?"):
-            try:
+        try:
+            if self.path == "/api/data":
+                self._serve_data()
+            elif self.path.startswith("/api/tiles/proxy?"):
                 self._proxy_tile()
-            except (ConnectionResetError, BrokenPipeError):
-                pass  # Client (SW) timed out and disconnected
-        elif self.path in self._SILENT_PATHS:
-            self.send_response(204)
-            self.end_headers()
-        else:
-            super().do_GET()
+            elif self.path in self._SILENT_PATHS:
+                self.send_response(204)
+                self.end_headers()
+            else:
+                super().do_GET()
+        except (ConnectionResetError, BrokenPipeError):
+            pass  # Client disconnected mid-response (refresh, SW abort, etc.)
 
     def do_POST(self):
-        if self.path == "/api/data":
-            self._save_data()
-        elif self.path.startswith("/api/tiles/cache?"):
-            self._cache_tile()
-        else:
-            m = PHOTO_RE.match(self.path)
-            if m:
-                self._save_photo(m.group(1), is_thumb=bool(m.group(2)))
+        try:
+            if self.path == "/api/data":
+                self._save_data()
+            elif self.path.startswith("/api/tiles/cache?"):
+                self._cache_tile()
             else:
-                self.send_error(404)
+                m = PHOTO_RE.match(self.path)
+                if m:
+                    self._save_photo(m.group(1), is_thumb=bool(m.group(2)))
+                else:
+                    self.send_error(404)
+        except (ConnectionResetError, BrokenPipeError):
+            pass
 
     def do_DELETE(self):
-        m = PHOTO_RE.match(self.path)
-        if m and not m.group(2):
-            self._delete_photo(m.group(1))
-        else:
-            self.send_error(404)
+        try:
+            m = PHOTO_RE.match(self.path)
+            if m and not m.group(2):
+                self._delete_photo(m.group(1))
+            else:
+                self.send_error(404)
+        except (ConnectionResetError, BrokenPipeError):
+            pass
 
     def _serve_data(self):
         if not os.path.exists(DATA_FILE):
@@ -390,11 +413,6 @@ class MatrixHandler(SimpleHTTPRequestHandler):
         if os.path.isfile(tile_path):
             with open(tile_path, 'rb') as f:
                 data = f.read()
-            # Touch mtime so LRU eviction keeps frequently accessed tiles
-            try:
-                os.utime(tile_path)
-            except OSError:
-                pass
             self._send_tile(data, content_type)
             return
         # Not on disk — return 404 so SW fetches directly from origin
@@ -521,8 +539,11 @@ if __name__ == "__main__":
             pass
         print(f"  Data file: {DATA_FILE}")
         print(f"  Photos dir: {PHOTOS_DIR}")
-        print(f"  Tiles cache: {TILES_DIR}")
+        print(f"  Tiles cache: {TILES_DIR} (max {MAX_TILES_MB}MB)")
         print(f"  Request log: {LOG_FILE}")
+        # Trim tile cache and rotate log on startup
+        _rotate_log()
+        threading.Thread(target=_evict_tiles_if_needed, daemon=True).start()
         print(f"  Press Ctrl+C to stop\n")
         threading.Thread(target=open_browser, daemon=True).start()
         try:

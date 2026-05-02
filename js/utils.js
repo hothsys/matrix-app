@@ -13,6 +13,8 @@ function showToast(msg,type='info'){const t=document.getElementById('toast');t.t
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function fmtDate(date,time){
   if(!date)return'';
+  if(date.length===4)return date;
+  if(date.length===7){const d=new Date(date+'-01T12:00:00');return d.toLocaleDateString('en-US',{year:'numeric',month:'short'});}
   const d=new Date(date+'T12:00:00');
   const ds=d.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
   return time?`${ds} ${fmtTime12(time)}`:ds;
@@ -26,11 +28,15 @@ function fmtTime12(time){
 }
 function fmtDateShort(date){
   if(!date)return'';
+  if(date.length===4)return date;
+  if(date.length===7){const d=new Date(date+'-01T12:00:00');return d.toLocaleDateString('en-US',{month:'short'});}
   const d=new Date(date+'T12:00:00');
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
 }
 function fmtDateLong(date){
   if(!date)return'No date';
+  if(date.length===4)return date;
+  if(date.length===7){const d=new Date(date+'-01T12:00:00');return d.toLocaleDateString('en-US',{year:'numeric',month:'long'});}
   const d=new Date(date+'T12:00:00');
   return d.toLocaleDateString('en-US',{weekday:'short',year:'numeric',month:'long',day:'numeric'});
 }
@@ -44,7 +50,15 @@ function _regionFromCoords(lat, lon) {
   if (lat >= 5 && lat <= 84 && lon >= -170 && lon <= -30) return 'North America';
   // Middle East checked before Europe — covers Arabian Peninsula, Levant, Iran, Iraq
   if (lat >= 12 && lat <= 42 && lon >= 34 && lon <= 63) return 'Middle East';
-  if (lat >= 35 && lat <= 75 && lon >= -25 && lon <= 65) return 'Europe';
+  // Atlantic European islands: Madeira (~33°N, -17°W), Canaries (~28°N, -16°W)
+  if (lat >= 27 && lat <= 34 && lon >= -19 && lon < -13.5) return 'Europe';
+  // North African coast west of Mediterranean (Morocco, western Algeria)
+  // lon >= -14 excludes Madeira (-16.9) which is Portuguese (Europe)
+  if (lat >= 27 && lat < 36 && lon >= -14 && lon < -1) return 'Africa';
+  // Mediterranean islands below lat 36 (Malta, Crete, etc.) are Europe
+  if (lat >= 34 && lat < 36 && lon >= 10 && lon <= 36) return 'Europe';
+  // lon >= -32 includes Azores (~-25 to -31) as Europe
+  if (lat >= 36 && lat <= 75 && lon >= -32 && lon <= 65) return 'Europe';
   if (lat >= -40 && lat <= 38 && lon >= -25 && lon <= 55) return 'Africa';
   if (lat >= -10 && lat <= 80 && lon >= 25 && lon <= 180) return 'Asia';
   if (lat >= -50 && lat <= 0 && lon >= 100 && lon <= 180) return 'Oceania';
@@ -107,9 +121,9 @@ const _countryContinent = {
 
 const EMPTY_PIN_COLOR = '#E8706F';
 const _continentColors = {
-  'North America':'#E04545', 'Caribbean':'#E0822A', 'South America':'#4AAF4E',
-  'Europe':'#4A7BD9', 'Middle East':'#22D4C8', 'Africa':'#B8A225',
-  'Asia':'#9B6FD9', 'Oceania':'#D94A8A'
+  'North America':'#DA1212', 'Caribbean':'#612D53', 'South America':'#3c8a3f',
+  'Europe':'#1e56c1', 'Middle East':'#1abfad', 'Africa':'#b88e26',
+  'Asia':'#b826b3', 'Oceania':'#482ae0'
 };
 function _continentColor(lat, lng, countryCode) {
   if (countryCode && _countryContinent[countryCode]) {
@@ -139,7 +153,9 @@ function datePickerHTML(id, value, opts={}) {
 }
 function getDatePickerValue(id) {
   const y=v(id+'_y'), m=v(id+'_m'), d=v(id+'_d');
-  if (!y||!m||!d) return '';
+  if (!y) return '';
+  if (!m) return y;
+  if (!d) return `${y}-${m}`;
   return `${y}-${m}-${d}`;
 }
 

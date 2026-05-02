@@ -56,8 +56,7 @@ function updateCountriesBar() {
     const isOverflowing = flagsEl.scrollHeight > flagsEl.clientHeight + 2;
     toggle.style.display = isOverflowing || !flagsEl.classList.contains('collapsed') ? 'block' : 'none';
     if (toggle.style.display === 'block') {
-      const collapsed = flagsEl.classList.contains('collapsed');
-      toggle.textContent = collapsed ? `Show all ${sorted.length} countries` : 'Show less';
+      toggle.classList.toggle('expanded', !flagsEl.classList.contains('collapsed'));
     }
   });
 }
@@ -65,10 +64,23 @@ function updateCountriesBar() {
 function toggleCountriesBar() {
   const flagsEl = document.getElementById('countries-flags');
   const toggle = document.getElementById('countries-toggle');
-  flagsEl.classList.toggle('collapsed');
   const collapsed = flagsEl.classList.contains('collapsed');
-  const count = flagsEl.querySelectorAll('span[data-name]').length;
-  toggle.textContent = collapsed ? `Show all ${count} countries` : 'Show less';
+  if (collapsed) {
+    // Expand: set max-height to actual content height for smooth animation
+    flagsEl.style.maxHeight = flagsEl.scrollHeight + 'px';
+    flagsEl.classList.remove('collapsed');
+    toggle.classList.add('expanded');
+    // After transition, remove inline max-height so it can grow if flags change
+    setTimeout(() => { flagsEl.style.maxHeight = ''; }, 300);
+  } else {
+    // Collapse: set current height first, then animate to collapsed height
+    flagsEl.style.maxHeight = flagsEl.scrollHeight + 'px';
+    requestAnimationFrame(() => {
+      flagsEl.classList.add('collapsed');
+      flagsEl.style.maxHeight = '';
+      toggle.classList.remove('expanded');
+    });
+  }
 }
 // Country flag hover → show name in status bar
 (function() {
@@ -135,13 +147,44 @@ async function _decompressGzip(blob) {
 // ═══════════════════════════════════════
 // EXPORT DATA
 // ═══════════════════════════════════════
-async function exportData() {
+function exportData() {
   document.getElementById('settings-dropdown').classList.remove('open');
   if (!photos.length && !albums.length) { showToast('No data to export','error'); return; }
+  showProg(true);
+  updProg(5, 'Preparing data...');
+  // Defer the heavy work so the progress bar renders immediately
+  setTimeout(() => _doExport(), 50);
+}
+async function _doExport() {
   const payload = { version: 1, exportedAt: Date.now(), photos, albums, geoCodeCache: {..._geoCodeCache}, geoCountryCache: {..._geoCountryCache} };
   const json = JSON.stringify(payload);
-  // Compress with gzip to save disk space
-  const blob = await _compressGzip(json);
+  // Compress with gzip in chunks so we can report real progress
+  const encoder = new TextEncoder();
+  const totalBytes = json.length;
+  const chunkSize = 256 * 1024;
+  const cs = new CompressionStream('gzip');
+  const writer = cs.writable.getWriter();
+  const reader = cs.readable.getReader();
+  const compressed = [];
+  const readAll = (async () => {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      compressed.push(value);
+    }
+  })();
+  let written = 0;
+  for (let i = 0; i < totalBytes; i += chunkSize) {
+    await writer.write(encoder.encode(json.slice(i, i + chunkSize)));
+    written = Math.min(i + chunkSize, totalBytes);
+    updProg(10 + Math.round(written / totalBytes * 85), `Compressing... ${Math.round(written / totalBytes * 100)}%`);
+  }
+  await writer.close();
+  await readAll;
+  const blob = new Blob(compressed);
+  updProg(100, 'Done');
+  await new Promise(r => setTimeout(r, 2000));
+  showProg(false);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   const d = new Date();
@@ -184,6 +227,11 @@ _importInput.addEventListener('change', async e => {
       showToast('Invalid backup file — missing photos or albums','error');
       return;
     }
+    const totalPhotos = data.photos.length;
+    const pinnedPhotos = data.photos.filter(p => p.lat !== null).length;
+    const totalAlbums = data.albums.length;
+    const summary = `Import summary:\n• ${totalPhotos} photo${totalPhotos !== 1 ? 's' : ''} (${pinnedPhotos} pinned)\n• ${totalAlbums} album${totalAlbums !== 1 ? 's' : ''}\n\nProceed with import?`;
+    if (!confirm(summary)) return;
     await doImport(data);
   } catch(err) {
     showToast('Failed to read backup file','error');
@@ -375,7 +423,7 @@ async function checkAutoRestore() {
           if (_geoCodeCache[key]) { p.countryCode = _geoCodeCache[key]; dbPut('photos', p); ccFilled++; }
         }
       }
-      if (ccFilled) updateCountriesBar();
+      if (ccFilled) { updateCountriesBar(); buildClusterIndex(); }
       // Mark photos as already on disk so auto-save doesn't re-upload them
       photos.forEach(p => _savedPhotoDisk.add(p.id));
 
@@ -480,7 +528,7 @@ async function init() {
       const key = `${p.lat.toFixed(4)}_${p.lng.toFixed(4)}`;
       if (_geoCodeCache[key]) { p.countryCode = _geoCodeCache[key]; dbPut('photos', p); filled++; }
     }
-    if (filled) { updateCountriesBar(); scheduleAutoSave(); }
+    if (filled) { updateCountriesBar(); scheduleAutoSave(); buildClusterIndex(); }
   }, 500);
   // Proactive tile caching — start after a short delay so it doesn't compete with initial load
   setTimeout(() => cacheMapTiles(), 10000);

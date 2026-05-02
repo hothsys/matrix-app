@@ -1,5 +1,5 @@
 // Matrix — Service Worker for offline support
-const CACHE_VERSION = 'matrix-v11';
+const CACHE_VERSION = 'matrix-v15';
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const TILE_CACHE = `${CACHE_VERSION}-tiles`;
 
@@ -62,7 +62,9 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((k) => k !== APP_CACHE && k !== TILE_CACHE).map((k) => caches.delete(k))
+        // Keep current app + tile caches, and preserve tile caches from older
+        // versions (tiles are map data — still valid across app updates)
+        keys.filter((k) => k !== APP_CACHE && k !== TILE_CACHE && !k.endsWith('-tiles')).map((k) => caches.delete(k))
       );
     })
   );
@@ -156,8 +158,6 @@ async function tileStrategy(request) {
   const cached = await caches.match(request, { ignoreVary: true });
   if (cached) return cached;
 
-  const proxyUrl = `http://localhost:${serverPort}/api/tiles/proxy?url=${encodeURIComponent(request.url)}`;
-
   const cacheAndReturn = async (body, ct) => {
     const cacheResp = new Response(body, { status: 200, headers: { 'Content-Type': ct } });
     const cache = await caches.open(TILE_CACHE);
@@ -166,39 +166,44 @@ async function tileStrategy(request) {
     return cacheResp;
   };
 
-  // Race L2 (disk cache) and L3 (origin) in parallel.
-  // The proxy only checks disk (no origin fetch), so this doesn't double origin requests.
-  // Disk hits win instantly (<10ms); cache misses lose to the direct fetch.
-  const diskCheck = (async () => {
+  // Online: skip disk proxy, fetch directly from origin (fast, no Python overhead)
+  // Offline: try disk cache first, then fail gracefully
+  if (navigator.onLine) {
+    try {
+      const oc = new AbortController();
+      const ot = setTimeout(() => oc.abort(), 8000);
+      const resp = await fetch(request, { signal: oc.signal });
+      clearTimeout(ot);
+      if (!resp.ok) throw new Error('origin error');
+      const body = await resp.arrayBuffer();
+      const ct = resp.headers.get('Content-Type') || 'application/octet-stream';
+      // Save to disk cache in background (fire-and-forget) for offline use
+      const cacheUrl = `http://localhost:${serverPort}/api/tiles/cache?url=${encodeURIComponent(request.url)}`;
+      fetch(cacheUrl, { method: 'POST', body: body.slice(0) }).catch(() => {});
+      return cacheAndReturn(body, ct);
+    } catch {
+      // Origin failed while online — try disk as fallback
+    }
+  }
+
+  // Offline or origin failed: try disk cache (L2)
+  try {
+    const proxyUrl = `http://localhost:${serverPort}/api/tiles/proxy?url=${encodeURIComponent(request.url)}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 500);
+    const timer = setTimeout(() => controller.abort(), 1000);
     const resp = await fetch(proxyUrl, { signal: controller.signal });
     clearTimeout(timer);
-    if (!resp.ok) throw new Error('not on disk');
-    const body = await resp.arrayBuffer();
-    const ct = resp.headers.get('Content-Type') || 'application/octet-stream';
-    return cacheAndReturn(body, ct);
-  })();
+    if (resp.ok) {
+      const body = await resp.arrayBuffer();
+      const ct = resp.headers.get('Content-Type') || 'application/octet-stream';
+      return cacheAndReturn(body, ct);
+    }
+  } catch {}
 
-  const originFetch = (async () => {
-    const resp = await fetch(request);
-    if (!resp.ok) throw new Error('origin error');
-    const body = await resp.arrayBuffer();
-    const ct = resp.headers.get('Content-Type') || 'application/octet-stream';
-    // Save to disk cache in background (fire-and-forget)
-    const cacheUrl = `http://localhost:${serverPort}/api/tiles/cache?url=${encodeURIComponent(request.url)}`;
-    fetch(cacheUrl, { method: 'POST', body: body }).catch(() => {});
-    return cacheAndReturn(body, ct);
-  })();
-
-  try {
-    return await Promise.any([diskCheck, originFetch]);
-  } catch {
-    return new Response(TRANSPARENT_PNG, {
-      status: 200,
-      headers: { 'Content-Type': 'image/png' }
-    });
-  }
+  return new Response(TRANSPARENT_PNG, {
+    status: 200,
+    headers: { 'Content-Type': 'image/png' }
+  });
 }
 
 function zoomFromUrl(url) {
