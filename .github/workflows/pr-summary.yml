@@ -14,45 +14,47 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            const prNumber = context.payload.pull_request.number;
+
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
+              pull_number: prNumber,
             });
 
             const { data: commits } = await github.rest.pulls.listCommits({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
+              pull_number: prNumber,
             });
 
             const { data: files } = await github.rest.pulls.listFiles({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
+              pull_number: prNumber,
             });
 
             const summary = `## 📋 PR Summary
 
-**Title:** ${pr.title}
-**Author:** @${pr.user.login}
-**State:** ${pr.state.toUpperCase()}
-**Draft:** ${pr.draft ? 'Yes' : 'No'}
+            **Title:** ${pr.title}
+            **Author:** @${pr.user.login}
+            **State:** ${pr.state.toUpperCase()}
+            **Draft:** ${pr.draft ? 'Yes' : 'No'}
 
-### Changes
-- **Commits:** ${commits.length}
-- **Files Changed:** ${files.length}
-- **Additions:** +${pr.additions}
-- **Deletions:** -${pr.deletions}
+            ### Changes
+            - **Commits:** ${commits.length}
+            - **Files Changed:** ${files.length}
+            - **Additions:** +${pr.additions}
+            - **Deletions:** -${pr.deletions}
 
-### Files Modified
-${files.slice(0, 10).map(f => \`- \\\`\${f.filename}\\\` (\${f.changes} changes)\`).join('\\n')}
-${files.length > 10 ? \`- ... and \${files.length - 10} more files\` : ''}
+            ### Files Modified
+            ${files.slice(0, 10).map(f => `- \`${f.filename}\` (${f.changes} changes)`).join('\n')}
+            ${files.length > 10 ? `- ... and ${files.length - 10} more files` : ''}
 
-${pr.body ? \`### Description\\n\${pr.body}\` : ''}`;
+            ${pr.body ? `### Description\n${pr.body}` : ''}`;
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: summary,
